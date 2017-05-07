@@ -1,0 +1,6 @@
+[submodule "glk/cheapglk"]
+	path = glk/cheapglk
+	url = https://github.com/erkyrath/cheapglk
+[submodule "glk/glkterm"]
+	path = glk/glkterm
+	url = https://github.com/erkyrath/glkterm
