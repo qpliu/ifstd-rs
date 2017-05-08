@@ -14,6 +14,9 @@ pub const RESUME_E2: u32 = 14;
     
 pub const FUNC_C0: u8 = 0xc0;
 pub const FUNC_C1: u8 = 0xc1;
+pub const STRING_E0: u8 = 0xe0;
+pub const STRING_E1: u8 = 0xe1;
+pub const STRING_E2: u8 = 0xe2;
 
 pub const LOCAL_NONE: u8 = 0;
 pub const LOCAL_8: u8 = 1;

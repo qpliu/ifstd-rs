@@ -150,18 +150,18 @@ pub fn read_u32(bytes: &[u8], index: usize) -> u32 {
         | (bytes[index+2] as u32) << 8 | bytes[index+3] as u32
 }
 
-pub fn write_u32(bytes: &mut Vec<u8>, index: usize, value: u32) {
-    bytes[index] = (value >> 24) as u8;
-    bytes[index+1] = (value >> 16) as u8;
-    bytes[index+2] = (value >> 8) as u8;
-    bytes[index+3] = value as u8;
+pub fn write_u32(bytes: &mut Vec<u8>, index: usize, val: u32) {
+    bytes[index] = (val >> 24) as u8;
+    bytes[index+1] = (val >> 16) as u8;
+    bytes[index+2] = (val >> 8) as u8;
+    bytes[index+3] = val as u8;
 }
 
 pub fn read_u16(bytes: &[u8], index: usize) -> u32 {
     (bytes[index] as u32) << 8 | bytes[index+1] as u32
 }
 
-pub fn write_u16(bytes: &mut Vec<u8>, index: usize, value: u32) {
-    bytes[index] = (value >> 8) as u8;
-    bytes[index+1] = value as u8;
+pub fn write_u16(bytes: &mut Vec<u8>, index: usize, val: u32) {
+    bytes[index] = (val >> 8) as u8;
+    bytes[index+1] = val as u8;
 }

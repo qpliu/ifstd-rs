@@ -1,4 +1,4 @@
-use super::accel;
+use super::{accel,iosys};
 use super::execute::Execute;
 
 const GLULX_VERSION: u32 = 0;
@@ -20,7 +20,7 @@ pub fn get(exec: &Execute, selector: u32, arg: u32) -> u32 {
         TERP_VERSION => 0x00000100,
         RESIZE_MEM => 1,
         UNDO => 1,
-        IOSYS => if exec.iosys.supported(arg) { 1 } else { 0 },
+        IOSYS => if iosys::supported(arg) { 1 } else { 0 },
         UNICODE => 1,
         MEMCOPY => 1,
         MALLOC => 1,

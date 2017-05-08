@@ -1,9 +1,9 @@
 use std::io;
-use std::io::{Read,Write};
+use std::io::{Error,ErrorKind,Read,Write};
 
 use iff::{Chunk,TypeID};
 
-use super::State;
+use super::state::{read_u32,MemoryBlock,State};
 
 #[allow(non_upper_case_globals)]
 mod ids {
@@ -21,10 +21,10 @@ mod ids {
 pub fn write<W: Write>(state: &State, w: &mut W) -> io::Result<()> {
     let mut cmem = Vec::new();
     {
-        super::push_u32(&mut cmem, state.mem.len() as u32);
+        push_u32(&mut cmem, state.mem.len() as u32);
 
         let mut run_len: usize = 0;
-        let ram_start = super::read_u32(&state.mem, 8) as usize;
+        let ram_start = read_u32(&state.mem, 8) as usize;
         for i in ram_start .. state.mem.len() {
             let b = if i < state.rom.len() {
                 state.mem[i] ^ state.rom[i]
@@ -51,16 +51,16 @@ pub fn write<W: Write>(state: &State, w: &mut W) -> io::Result<()> {
 
     let mut stks = Vec::with_capacity(4*state.stack.len());
     for word in &state.stack[..] {
-        super::push_u32(&mut stks, *word);
+        push_u32(&mut stks, *word);
     }
 
     let mut mall = Vec::new();
     if !state.heap.is_empty() {
-        super::push_u32(&mut mall, state.heap_ptr as u32);
-        super::push_u32(&mut mall, state.heap.len() as u32);
+        push_u32(&mut mall, state.heap_ptr as u32);
+        push_u32(&mut mall, state.heap.len() as u32);
         for block in &state.heap[..] {
-            super::push_u32(&mut mall, block.addr as u32);
-            super::push_u32(&mut mall, block.size as u32);
+            push_u32(&mut mall, block.addr as u32);
+            push_u32(&mut mall, block.size as u32);
         }
     }
 
@@ -79,20 +79,20 @@ pub fn read<R: Read>(state: &mut State, r: &mut R) -> io::Result<()> {
     r.read_to_end(&mut vec)?;
     let chunk = Chunk::new(&vec[..])?;
     if !chunk.has_envelope_type(ids::FORM, ids::IFZS) {
-        return Err(super::invalid_data("invalid save data"));
+        return Err(invalid_data("invalid save data"));
     }
     read_save_chunks(state, &chunk.data_chunks()[..])
 }
 
 fn read_save_chunks(state: &mut State, chunks: &[(TypeID,&[u8])]) -> io::Result<()> {
     if chunks.len() < 3 {
-        return Err(super::invalid_data("invalid save data"))
+        return Err(invalid_data("invalid save data"))
     }
     if chunks[0].0 != ids::IFhd {
-        return Err(super::invalid_data("invalid save data"))
+        return Err(invalid_data("invalid save data"))
     }
     if chunks[0].1 != &state.mem[0..128] {
-        return Err(super::invalid_data("invalid save data"))
+        return Err(invalid_data("invalid save data"))
     }
     for &(id,data) in chunks {
         match id {
@@ -108,14 +108,14 @@ fn read_save_chunks(state: &mut State, chunks: &[(TypeID,&[u8])]) -> io::Result<
 
 fn read_cmem(state: &mut State, data: &[u8]) -> io::Result<()> {
     if data.len() < 4 {
-        return Err(super::invalid_data("invalid CMem chunk"))
+        return Err(invalid_data("invalid CMem chunk"))
     }
-    let mem_size = super::read_u32(&data, 0) as usize;
+    let mem_size = read_u32(&data, 0) as usize;
     state.mem.clear();
     state.mem.extend_from_slice(&state.rom[..]);
     state.mem.resize(mem_size, 0);
 
-    let mut i = super::read_u32(&state.mem, 8) as usize;
+    let mut i = read_u32(&state.mem, 8) as usize;
     let mut zero = false;
     for b in &data[4..] {
         if zero {
@@ -134,14 +134,14 @@ fn read_cmem(state: &mut State, data: &[u8]) -> io::Result<()> {
 
 fn read_umem(state: &mut State, data: &[u8]) -> io::Result<()> {
     if data.len() < 4 {
-        return Err(super::invalid_data("invalid UMem chunk"))
+        return Err(invalid_data("invalid UMem chunk"))
     }
-    let mem_size = super::read_u32(&data, 0) as usize;
+    let mem_size = read_u32(&data, 0) as usize;
     state.mem.clear();
     state.mem.extend_from_slice(&state.rom[..]);
     state.mem.resize(mem_size, 0);
 
-    let ram_start = super::read_u32(&state.mem, 8) as usize;
+    let ram_start = read_u32(&state.mem, 8) as usize;
     for i in 4 .. data.len() {
         state.mem[ram_start - 4 + i] = data[i];
     }
@@ -150,27 +150,38 @@ fn read_umem(state: &mut State, data: &[u8]) -> io::Result<()> {
 
 fn read_stks(state: &mut State, data: &[u8]) -> io::Result<()> {
     if data.len() % 4 != 0 && data.len() < 16 {
-        return Err(super::invalid_data("invalid Stks chunk"))
+        return Err(invalid_data("invalid Stks chunk"))
     }
     state.stack.clear();
     for i in 0 .. data.len()/4 {
-        state.stack.push(super::read_u32(data, i*4));
+        state.stack.push(read_u32(data, i*4));
     }
     Ok(())
 }
 
 fn read_mall(state: &mut State, data: &[u8]) -> io::Result<()> {
     if data.len() < 8 {
-        return Err(super::invalid_data("invalid MAll chunk"))
+        return Err(invalid_data("invalid MAll chunk"))
     }
-    state.heap_ptr = super::read_u32(data, 0) as usize;
+    state.heap_ptr = read_u32(data, 0) as usize;
     state.heap.clear();
-    for i in 0 .. super::read_u32(data, 4) as usize {
-        state.heap.push(super::MemoryBlock{
-                addr: super::read_u32(data, 8+i*8) as usize,
-                size: super::read_u32(data, 12+i*8) as usize,
+    for i in 0 .. read_u32(data, 4) as usize {
+        state.heap.push(MemoryBlock{
+                addr: read_u32(data, 8+i*8) as usize,
+                size: read_u32(data, 12+i*8) as usize,
             })
     }
     state.heap.sort();
     Ok(())
+}
+
+fn invalid_data(msg: &str) -> Error {
+    Error::new(ErrorKind::InvalidData, msg)
+}
+
+fn push_u32(bytes: &mut Vec<u8>, val: u32) {
+    bytes.push((val >> 24) as u8);
+    bytes.push((val >> 16) as u8);
+    bytes.push((val >> 8) as u8);
+    bytes.push(val as u8);
 }
