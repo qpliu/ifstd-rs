@@ -1,3 +1,4 @@
+use super::iosys;
 use super::state::{read_u32,write_u32,State};
 use super::execute::Execute;
 
@@ -151,11 +152,11 @@ pub fn ret(exec: &mut Execute, val: u32) -> bool {
         MEM => write_u32(&mut exec.state.mem, dest_addr, val),
         LOCAL => exec.state.stack[exec.frame_locals + dest_addr/4] = val,
         STACK => exec.state.stack.push(val),
-        RESUME_E1 => unimplemented!(),
-        RESUME_CODE => unimplemented!(),
-        RESUME_NUM => unimplemented!(),
-        RESUME_E0 => unimplemented!(),
-        RESUME_E2 => unimplemented!(),
+        RESUME_E1 => iosys::resume_e1(exec, dest_addr as u8),
+        RESUME_CODE => (),
+        RESUME_NUM => iosys::resume_num(exec, dest_addr),
+        RESUME_E0 => iosys::resume_e0(exec),
+        RESUME_E2 => iosys::resume_e2(exec),
         _ => panic!("unknown DestType {:x}", dest_type),
     }
     true

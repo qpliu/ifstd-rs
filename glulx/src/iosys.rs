@@ -94,11 +94,11 @@ pub fn streamnum(exec: &mut Execute, val: i32) {
 pub fn streamstr(exec: &mut Execute, addr: usize) {
     let (dest_type,pc) = match exec.state.mem[addr] {
         call::STRING_E0 => (call::RESUME_E0,addr+1),
-        call::STRING_E1 => {
-            assert_eq!(read_u32(&exec.state.mem, addr), 0xe1000000, "{:x}: invalid padding for E1 string object", addr);
-            (call::RESUME_E1,addr+4)
+        call::STRING_E1 => (call::RESUME_E1,addr+1),
+        call::STRING_E2 => {
+            assert_eq!(read_u32(&exec.state.mem, addr), 0xe2000000, "{:x}: invalid padding for E2 string object", addr);
+            (call::RESUME_E2,addr+4)
         },
-        call::STRING_E2 => (call::RESUME_E2,addr+1),
         b => panic!("{:x}: unknown string type {:x}", addr, b),
     };
     match exec.iosys.mode {
@@ -111,6 +111,179 @@ pub fn streamstr(exec: &mut Execute, addr: usize) {
         },
         Mode::Glk => unimplemented!(),
     }
+}
+
+pub fn resume_e0(exec: &mut Execute) {
+    let val = exec.state.mem[exec.state.pc] as u32;
+    if val == 0 {
+        call::ret(exec, 0);
+        return;
+    }
+    exec.state.pc += 1;
+    call::push_stub(&mut exec.state, call::RESUME_E0, 0);
+    exec.call_tmp.clear();
+    exec.call_tmp.push(val);
+    let addr = exec.iosys.rock as usize;
+    call::call(exec, addr);
+}
+
+pub fn resume_e1(exec: &mut Execute, bit_index: u8) {
+    let mut ptr = exec.stringtbl;
+    ptr = read_u32(&exec.state.mem, ptr+8) as usize;
+
+    let mut bi = bit_index;
+    let mut b = exec.state.mem[exec.state.pc];
+    loop {
+        let (argc,addr) = match exec.state.mem[ptr] {
+            0 => {
+                ptr = read_u32(&exec.state.mem, ptr + if (b >> bi) & 1 == 0 { 1 } else { 5 }) as usize;
+                bi += 1;
+                if bi >= 8 {
+                    bi = 0;
+                    exec.state.pc += 1;
+                    b = exec.state.mem[exec.state.pc];
+                }
+                continue;
+            },
+            1 => {
+                call::ret(exec, 0);
+                break;
+            },
+            2 => {
+                let val = exec.state.mem[ptr+1] as u32;
+                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.call_tmp.clear();
+                exec.call_tmp.push(val);
+                let addr = exec.iosys.rock as usize;
+                call::call(exec, addr);
+                break;
+            },
+            3 => {
+                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.state.pc = ptr+1;
+                call::push_stub(&mut exec.state, call::RESUME_E0, 0);
+                call::ret(exec, 0);
+                break;
+            },
+            4 => {
+                let val = read_u32(&exec.state.mem, ptr+1);
+                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.call_tmp.clear();
+                exec.call_tmp.push(val);
+                let addr = exec.iosys.rock as usize;
+                call::call(exec, addr);
+                break;
+            },
+            5 => {
+                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.state.pc = ptr+1;
+                call::push_stub(&mut exec.state, call::RESUME_E2, 0);
+                call::ret(exec, 0);
+                break;
+            },
+            8 => (0,read_u32(&exec.state.mem, ptr+1) as usize),
+            9 => {
+                let indirect = read_u32(&exec.state.mem, ptr+1) as usize;
+                (0,read_u32(&exec.state.mem, indirect) as usize)
+            },
+            10 => {
+                let argc = read_u32(&exec.state.mem, ptr+5) as usize;
+                (argc,read_u32(&exec.state.mem, ptr+1) as usize)
+            },
+            11 => {
+                let argc = read_u32(&exec.state.mem, ptr+5) as usize;
+                let indirect = read_u32(&exec.state.mem, ptr+1) as usize;
+                (argc,read_u32(&exec.state.mem, indirect) as usize)
+            },
+            t => panic!("{:x}: invalid stringtbl node type {:x}", ptr, t),
+        };
+        call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+        match exec.state.mem[addr] {
+            call::FUNC_C0 | call::FUNC_C1 => {
+                exec.call_tmp.clear();
+                for i in 0 .. argc {
+                    let val = read_u32(&exec.state.mem, ptr+5+4*i);
+                    exec.call_tmp.push(val);
+                }
+                call::call(exec, addr);
+            },
+            call::STRING_E0 => {
+                exec.state.pc = addr+1;
+                call::push_stub(&mut exec.state, call::RESUME_E0, 0);
+                call::ret(exec, 0);
+            },
+            call::STRING_E1 => {
+                exec.state.pc = addr+1;
+                call::push_stub(&mut exec.state, call::RESUME_E1, 0);
+                call::ret(exec, 0);
+            },
+            call::STRING_E2 => {
+                assert_eq!(read_u32(&exec.state.mem, addr), 0xe2000000, "{:x}: invalid padding for E2 string object", addr);
+                exec.state.pc = addr+4;
+                call::push_stub(&mut exec.state, call::RESUME_E2, 0);
+                call::ret(exec, 0);
+            },
+            b => panic!("{:x}: invalid object type {:x}", addr, b),
+        }
+    }
+}
+
+pub fn resume_e2(exec: &mut Execute) {
+    let val = read_u32(&exec.state.mem, exec.state.pc);
+    if val == 0 {
+        call::ret(exec, 0);
+        return;
+    }
+    exec.state.pc += 4;
+    call::push_stub(&mut exec.state, call::RESUME_E2, 0);
+    exec.call_tmp.clear();
+    exec.call_tmp.push(val);
+    let addr = exec.iosys.rock as usize;
+    call::call(exec, addr);
+}
+
+pub fn resume_num(exec: &mut Execute, pos: usize) {
+    let num = exec.state.pc as i32;
+    let size = {
+        let mut size = 1;
+        let mut n = num;
+        if n < 0 {
+            n = -n;
+            size += 1;
+        }
+        loop {
+            n /= 10;
+            if n == 0 {
+                break;
+            }
+            size += 1;
+        }
+        size
+    };
+    if pos >= size {
+        call::ret(exec, 0);
+        return;
+    }
+    let val = if pos == 0 && num < 0 {
+        '-' as u32
+    } else {
+        let mut i = size;
+        let mut n = num;
+        if n < 0 {
+            n = -n;
+            i -= 1;
+        }
+        while i > 0 {
+            i -= 1;
+            n /= 10;
+        }
+        '0' as u32 + n as u32
+    };
+    call::push_stub(&mut exec.state, call::RESUME_NUM, pos as u32 + 1);
+    exec.call_tmp.clear();
+    exec.call_tmp.push(val);
+    let addr = exec.iosys.rock as usize;
+    call::call(exec, addr);
 }
 
 pub fn save(exec: &Execute, outstream: u32) -> bool {
