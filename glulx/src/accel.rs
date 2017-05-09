@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
-use super::state::read_u32;
+use super::search;
+use super::state::{read_u16,read_u32};
 use super::execute::Execute;
+
+const WORDSIZE: u32 = 4;
 
 const FUNC_1_Z__REGION: u32 = 1;
 const FUNC_2_CP__TAB: u32 = 2;
@@ -69,6 +72,18 @@ impl Accel {
             _ => (),
         }
     }
+
+    fn call(&self) -> u32 {
+        self.indiv_prop_start + 5
+    }
+
+    fn print(&self) -> u32 {
+        self.indiv_prop_start + 6
+    }
+
+    fn print_to_array(&self) -> u32 {
+        self.indiv_prop_start + 7
+    }
 }
 
 pub fn supported(func: u32) -> bool {
@@ -95,29 +110,36 @@ pub fn call(exec: &Execute, addr: usize) -> Option<u32> {
     let arg0 = exec.call_args.get(0).unwrap_or(&0).clone();
     let arg1 = exec.call_args.get(1).unwrap_or(&0).clone();
     match exec.accel.funcs.get(&addr) {
-        Some(&FUNC_1_Z__REGION) => Some(func_1_z__region(exec, arg0)),
-        Some(&FUNC_2_CP__TAB) => Some(func_2_cp__tab(exec, arg0, arg1)),
-        Some(&FUNC_3_RA__PR) => Some(func_3_ra__pr(exec, arg0, arg1)),
-        Some(&FUNC_4_RL__PR) => Some(func_4_rl__pr(exec, arg0, arg1)),
-        Some(&FUNC_5_OC__CL) => Some(func_5_oc__cl(exec, arg0, arg1)),
-        Some(&FUNC_6_RV__PR) => Some(func_6_rv__pr(exec, arg0, arg1)),
-        Some(&FUNC_7_OP__PR) => Some(func_7_op__pr(exec, arg0, arg1)),
-        Some(&FUNC_8_CP__TAB) => Some(func_8_cp__tab(exec, arg0, arg1)),
-        Some(&FUNC_9_RA__PR) => Some(func_9_ra__pr(exec, arg0, arg1)),
-        Some(&FUNC_10_RL__PR) => Some(func_10_rl__pr(exec, arg0, arg1)),
-        Some(&FUNC_11_OC__CL) => Some(func_11_oc__cl(exec, arg0, arg1)),
-        Some(&FUNC_12_RV__PR) => Some(func_12_rv__pr(exec, arg0, arg1)),
-        Some(&FUNC_13_OP__PR) => Some(func_13_op__pr(exec, arg0, arg1)),
+        Some(&FUNC_1_Z__REGION) => Some(FUNC_1_Z__Region(exec, arg0)),
+        Some(&FUNC_2_CP__TAB) => Some(FUNC_2_CP__Tab(exec, arg0, arg1)),
+        Some(&FUNC_3_RA__PR) => Some(FUNC_3_RA__Pr(exec, arg0, arg1)),
+        Some(&FUNC_4_RL__PR) => Some(FUNC_4_RL__Pr(exec, arg0, arg1)),
+        Some(&FUNC_5_OC__CL) => Some(FUNC_5_OC__Cl(exec, arg0, arg1)),
+        Some(&FUNC_6_RV__PR) => Some(FUNC_6_RV__Pr(exec, arg0, arg1)),
+        Some(&FUNC_7_OP__PR) => Some(FUNC_7_OP__Pr(exec, arg0, arg1)),
+        Some(&FUNC_8_CP__TAB) => Some(FUNC_8_CP__Tab(exec, arg0, arg1)),
+        Some(&FUNC_9_RA__PR) => Some(FUNC_9_RA__Pr(exec, arg0, arg1)),
+        Some(&FUNC_10_RL__PR) => Some(FUNC_10_RL__Pr(exec, arg0, arg1)),
+        Some(&FUNC_11_OC__CL) => Some(FUNC_11_OC__Cl(exec, arg0, arg1)),
+        Some(&FUNC_12_RV__PR) => Some(FUNC_12_RV__Pr(exec, arg0, arg1)),
+        Some(&FUNC_13_OP__PR) => Some(FUNC_13_OP__Pr(exec, arg0, arg1)),
         _ => None,
     }
 }
 
-fn obj_in_class(exec: &Execute, addr: usize) -> bool {
+#[allow(non_snake_case)]
+fn ERROR(exec: &Execute, msg: &'static str) {
+    let _ = (exec,msg);
+    unimplemented!();
+}
+
+#[allow(non_snake_case)]
+fn OBJ_IN_CLASS(exec: &Execute, addr: usize) -> bool {
     exec.accel.class_metaclass == read_u32(&exec.state.mem, addr + 13 + exec.accel.num_attr_bytes as usize)
 }
 
 #[allow(non_snake_case)]
-fn func_1_z__region(exec: &Execute, arg0: u32) -> u32 {
+fn FUNC_1_Z__Region(exec: &Execute, arg0: u32) -> u32 {
     let addr = arg0 as usize;
     if addr < 36 {
         return 0;
@@ -139,73 +161,371 @@ fn func_1_z__region(exec: &Execute, arg0: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn func_2_cp__tab(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_2_CP__Tab(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let id = arg1;
+    if FUNC_1_Z__Region(exec, obj as u32) != 1 {
+        ERROR(exec, "[** Programming error: tried to find the ~.~ of (something) **]");
+        return 0;
+    }
+    let otab = read_u32(&exec.state.mem, obj + 16) as usize;
+    if otab == 0 {
+        return 0;
+    }
+    let max = read_u32(&exec.state.mem, otab) as usize;
+    search::binary(&exec.state, id, 2, otab+4, 10, max, 0, 0)
 }
 
 #[allow(non_snake_case)]
-fn func_3_ra__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_3_RA__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let mut obj = arg0 as usize;
+    let mut id = arg1;
+    let mut cla = 0;
+    if id & 0xffff0000 != 0 {
+        cla = read_u32(&exec.state.mem, exec.accel.classes_table as usize + 4*(id as usize & 0xffff)) as usize;
+        if FUNC_5_OC__Cl(exec, obj as u32, cla as u32) == 0 {
+            return 0;
+        }
+        id >>= 16;
+        obj = cla;
+    }
+    let prop = FUNC_2_CP__Tab(exec, obj as u32, cla as u32) as usize;
+    if prop == 0 {
+        return 0;
+    }
+    if OBJ_IN_CLASS(exec, obj) && cla == 0 {
+        if id < exec.accel.indiv_prop_start || id >= exec.accel.indiv_prop_start+8 {
+            return 0;
+        }
+    }
+    if read_u32(&exec.state.mem, exec.accel.param_self as usize) as usize != obj {
+        let ix = exec.state.mem[prop+9] & 1;
+        if ix != 0 {
+            return 0;
+        }
+    }
+    read_u32(&exec.state.mem, prop+4)
 }
 
 #[allow(non_snake_case)]
-fn func_4_rl__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_4_RL__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let mut obj = arg0 as usize;
+    let mut id = arg1;
+    let mut cla = 0;
+    if id & 0xffff0000 != 0 {
+        cla = read_u32(&exec.state.mem, exec.accel.classes_table as usize + 4*(id as usize & 0xffff)) as usize;
+        if FUNC_5_OC__Cl(exec, obj as u32, cla as u32) == 0 {
+            return 0;
+        }
+        id >>= 16;
+        obj = cla;
+    }
+    let prop = FUNC_2_CP__Tab(exec, obj as u32, id as u32) as usize;
+    if prop == 0 {
+        return 0;
+    }
+    if OBJ_IN_CLASS(exec, obj) && cla == 0 {
+        if id < exec.accel.indiv_prop_start || id >= exec.accel.indiv_prop_start+8 {
+            return 0;
+        }
+    }
+    if read_u32(&exec.state.mem, exec.accel.param_self as usize) as usize != obj {
+        let ix = exec.state.mem[prop+9] & 1;
+        if ix != 0 {
+            return 0;
+        }
+    }
+    let ix = read_u16(&exec.state.mem, prop + 2);
+    WORDSIZE * ix
 }
 
 #[allow(non_snake_case)]
-fn func_5_oc__cl(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_5_OC__Cl(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let cla = arg1 as usize;
+    let zr = FUNC_1_Z__Region(exec, obj as u32);
+    if zr == 3 {
+        if cla == exec.accel.string_metaclass as usize {
+            return 1;
+        }
+        return 0;
+    }
+    if zr == 2 {
+        if cla == exec.accel.routine_metaclass as usize {
+            return 1;
+        }
+        return 0;
+    }
+    if zr != 1 {
+        return 0;
+    }
+    if cla == exec.accel.class_metaclass as usize {
+        if OBJ_IN_CLASS(exec, obj)
+            || obj == exec.accel.class_metaclass as usize
+            || obj == exec.accel.string_metaclass as usize
+            || obj == exec.accel.routine_metaclass as usize
+            || obj == exec.accel.object_metaclass as usize {
+            return 1;
+        }
+        return 0;
+    }
+    if cla == exec.accel.object_metaclass as usize {
+        if OBJ_IN_CLASS(exec, obj)
+            || obj == exec.accel.class_metaclass as usize
+            || obj == exec.accel.string_metaclass as usize
+            || obj == exec.accel.routine_metaclass as usize
+            || obj == exec.accel.object_metaclass as usize {
+            return 0;
+        }
+        return 1;
+    }
+    if cla == exec.accel.string_metaclass as usize || cla == exec.accel.routine_metaclass as usize {
+        return 0;
+    }
+    if !OBJ_IN_CLASS(exec, cla) {
+        ERROR(exec, "[** Programming error: tried to apply 'ofclass' with non-class **]");
+        return 0;
+    }
+    let inlist = FUNC_3_RA__Pr(exec, obj as u32, 2) as usize;
+    if inlist == 0 {
+        return 0;
+    }
+    let inlistlen = (FUNC_4_RL__Pr(exec, obj as u32, 2) / WORDSIZE) as usize;
+    for jx in 0 .. inlistlen {
+        if read_u32(&exec.state.mem, inlist + 4*jx) as usize == cla {
+            return 1;
+        }
+    }
+    0
 }
 
 #[allow(non_snake_case)]
-fn func_6_rv__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_6_RV__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let id = arg1;
+    let addr = FUNC_3_RA__Pr(exec, obj as u32, id) as usize;
+    if addr == 0 {
+        if id > 0 && id < exec.accel.indiv_prop_start {
+            return read_u32(&exec.state.mem, (exec.accel.cpv_start + id*4) as usize);
+        }
+        ERROR(exec, "[** Programming error: tried to read (something) **]");
+        return 0;
+    }
+    read_u32(&exec.state.mem, addr)
 }
 
 #[allow(non_snake_case)]
-fn func_7_op__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_7_OP__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let id = arg1;
+    let zr = FUNC_1_Z__Region(exec, obj as u32);
+    if zr == 3 {
+        if id == exec.accel.print() || id == exec.accel.print_to_array() {
+            return 1;
+        }
+        return 0;
+    }
+    if zr == 2 {
+        if id == exec.accel.call() {
+            return 1;
+        }
+        return 0;
+    }
+    if zr != 1 {
+        return 0;
+    }
+    if id >= exec.accel.indiv_prop_start && id < exec.accel.indiv_prop_start+8 {
+        if OBJ_IN_CLASS(exec, obj) {
+            return 1;
+        }
+    }
+    if FUNC_3_RA__Pr(exec, obj as u32, id) != 0 {
+        return 1;
+    }
+    0
 }
 
 #[allow(non_snake_case)]
-fn func_8_cp__tab(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_8_CP__Tab(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let id = arg1;
+    if FUNC_1_Z__Region(exec, obj as u32) != 1 {
+        ERROR(exec, "[** Programming error: tried to find the ~.~ of (something) **]");
+        return 0;
+    }
+    let otab = read_u32(&exec.state.mem, obj + 4*(3+exec.accel.num_attr_bytes as usize/4)) as usize;
+    if otab == 0 {
+        return 0;
+    }
+    let max = read_u32(&exec.state.mem, otab) as usize;
+    search::binary(&exec.state, id, 2, otab+4, 10, max, 0, 0)
 }
 
 #[allow(non_snake_case)]
-fn func_9_ra__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_9_RA__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let mut obj = arg0 as usize;
+    let mut id = arg1;
+    let mut cla = 0;
+    if id & 0xffff0000 != 0 {
+        cla = read_u32(&exec.state.mem, exec.accel.classes_table as usize + 4*(id as usize & 0xffff)) as usize;
+        if FUNC_11_OC__Cl(exec, obj as u32, cla as u32) == 0 {
+            return 0;
+        }
+        id >>= 16;
+        obj = cla;
+    }
+    let prop = FUNC_8_CP__Tab(exec, obj as u32, cla as u32) as usize;
+    if prop == 0 {
+        return 0;
+    }
+    if OBJ_IN_CLASS(exec, obj) && cla == 0 {
+        if id < exec.accel.indiv_prop_start || id >= exec.accel.indiv_prop_start+8 {
+            return 0;
+        }
+    }
+    if read_u32(&exec.state.mem, exec.accel.param_self as usize) as usize != obj {
+        let ix = exec.state.mem[prop+9] & 1;
+        if ix != 0 {
+            return 0;
+        }
+    }
+    read_u32(&exec.state.mem, prop+4)
 }
 
 #[allow(non_snake_case)]
-fn func_10_rl__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_10_RL__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let mut obj = arg0 as usize;
+    let mut id = arg1;
+    let mut cla = 0;
+    if id & 0xffff0000 != 0 {
+        cla = read_u32(&exec.state.mem, exec.accel.classes_table as usize + 4*(id as usize & 0xffff)) as usize;
+        if FUNC_11_OC__Cl(exec, obj as u32, cla as u32) == 0 {
+            return 0;
+        }
+        id >>= 16;
+        obj = cla;
+    }
+    let prop = FUNC_8_CP__Tab(exec, obj as u32, id as u32) as usize;
+    if prop == 0 {
+        return 0;
+    }
+    if OBJ_IN_CLASS(exec, obj) && cla == 0 {
+        if id < exec.accel.indiv_prop_start || id >= exec.accel.indiv_prop_start+8 {
+            return 0;
+        }
+    }
+    if read_u32(&exec.state.mem, exec.accel.param_self as usize) as usize != obj {
+        let ix = exec.state.mem[prop+9] & 1;
+        if ix != 0 {
+            return 0;
+        }
+    }
+    let ix = read_u16(&exec.state.mem, prop + 2);
+    WORDSIZE * ix
 }
 
 #[allow(non_snake_case)]
-fn func_11_oc__cl(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_11_OC__Cl(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let cla = arg1 as usize;
+    let zr = FUNC_1_Z__Region(exec, obj as u32);
+    if zr == 3 {
+        if cla == exec.accel.string_metaclass as usize {
+            return 1;
+        }
+        return 0;
+    }
+    if zr == 2 {
+        if cla == exec.accel.routine_metaclass as usize {
+            return 1;
+        }
+        return 0;
+    }
+    if zr != 1 {
+        return 0;
+    }
+    if cla == exec.accel.class_metaclass as usize {
+        if OBJ_IN_CLASS(exec, obj)
+            || obj == exec.accel.class_metaclass as usize
+            || obj == exec.accel.string_metaclass as usize
+            || obj == exec.accel.routine_metaclass as usize
+            || obj == exec.accel.object_metaclass as usize {
+            return 1;
+        }
+        return 0;
+    }
+    if cla == exec.accel.object_metaclass as usize {
+        if OBJ_IN_CLASS(exec, obj)
+            || obj == exec.accel.class_metaclass as usize
+            || obj == exec.accel.string_metaclass as usize
+            || obj == exec.accel.routine_metaclass as usize
+            || obj == exec.accel.object_metaclass as usize {
+            return 0;
+        }
+        return 1;
+    }
+    if cla == exec.accel.string_metaclass as usize || cla == exec.accel.routine_metaclass as usize {
+        return 0;
+    }
+    if !OBJ_IN_CLASS(exec, cla) {
+        ERROR(exec, "[** Programming error: tried to apply 'ofclass' with non-class **]");
+        return 0;
+    }
+    let inlist = FUNC_9_RA__Pr(exec, obj as u32, 2) as usize;
+    if inlist == 0 {
+        return 0;
+    }
+    let inlistlen = (FUNC_10_RL__Pr(exec, obj as u32, 2) / WORDSIZE) as usize;
+    for jx in 0 .. inlistlen {
+        if read_u32(&exec.state.mem, inlist + 4*jx) as usize == cla {
+            return 1;
+        }
+    }
+    0
 }
 
 #[allow(non_snake_case)]
-fn func_12_rv__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_12_RV__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let id = arg1;
+    let addr = FUNC_9_RA__Pr(exec, obj as u32, id) as usize;
+    if addr == 0 {
+        if id > 0 && id < exec.accel.indiv_prop_start {
+            return read_u32(&exec.state.mem, (exec.accel.cpv_start + id*4) as usize);
+        }
+        ERROR(exec, "[** Programming error: tried to read (something) **]");
+        return 0;
+    }
+    read_u32(&exec.state.mem, addr)
 }
 
 #[allow(non_snake_case)]
-fn func_13_op__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
-    let _ = (exec,arg0,arg1,obj_in_class);
-    unimplemented!()
+fn FUNC_13_OP__Pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let obj = arg0 as usize;
+    let id = arg1;
+    let zr = FUNC_1_Z__Region(exec, obj as u32);
+    if zr == 3 {
+        if id == exec.accel.print() || id == exec.accel.print_to_array() {
+            return 1;
+        }
+        return 0;
+    }
+    if zr == 2 {
+        if id == exec.accel.call() {
+            return 1;
+        }
+        return 0;
+    }
+    if zr != 1 {
+        return 0;
+    }
+    if id >= exec.accel.indiv_prop_start && id < exec.accel.indiv_prop_start+8 {
+        if OBJ_IN_CLASS(exec, obj) {
+            return 1;
+        }
+    }
+    if FUNC_9_RA__Pr(exec, obj as u32, id) != 0 {
+        return 1;
+    }
+    0
 }
