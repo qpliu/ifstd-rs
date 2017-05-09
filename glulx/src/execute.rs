@@ -11,7 +11,7 @@ pub struct Execute {
     pub protected_tmp: Vec<u8>,
     pub rng: rand::XorShiftRng,
     pub stringtbl: usize,
-    pub call_tmp: Vec<u32>,
+    pub call_args: Vec<u32>,
     pub iosys: iosys::IOSys,
     pub accel: accel::Accel,
 
@@ -33,7 +33,7 @@ impl Execute {
             protected_tmp: Vec::new(),
             rng: rand::SeedableRng::from_seed(rand::random()),
             stringtbl: stringtbl,
-            call_tmp: Vec::new(),
+            call_args: Vec::new(),
             iosys: iosys::IOSys::new(),
             accel: accel::Accel::new(),
 
@@ -236,16 +236,10 @@ impl Execute {
                 let (l1,l2,s1) = self.l1l2s1();
                 let addr = l1 as usize;
                 let (dest_type,dest_addr) = s1.result_dest(self);
-                self.call_tmp.clear();
+                self.call_args.clear();
                 let args = self.state.stack.len() - l2 as usize .. self.state.stack.len();
-                self.call_tmp.extend(self.state.stack.drain(args));
-                match accel::call(self, addr) {
-                    None => {
-                        call::push_stub(&mut self.state, dest_type, dest_addr);
-                        call::call(self, addr);
-                    },
-                    Some(val) => s1.store(self, val),
-                }
+                self.call_args.extend(self.state.stack.drain(args));
+                call::call(self, addr, dest_type, dest_addr);
             },
             opcode::RETURN => {
                 let l1 = self.l1();
@@ -272,15 +266,12 @@ impl Execute {
             opcode::TAILCALL => {
                 let (l1,l2) = self.l1l2();
                 let addr = l1 as usize;
-                self.call_tmp.clear();
+                self.call_args.clear();
                 let args = self.state.stack.len() - l2 as usize .. self.state.stack.len();
-                self.call_tmp.extend_from_slice(&self.state.stack[args]);
+                self.call_args.extend_from_slice(&self.state.stack[args]);
                 self.state.stack.truncate(self.state.frame_ptr);
-                match accel::call(self, addr) {
-                    None => call::call(self, addr),
-                    Some(val) => if !call::ret(self, val) {
-                        return false;
-                    },
+                if !call::tailcall(self, addr) {
+                    return false;
                 }
             },
             opcode::COPY => {
@@ -390,19 +381,19 @@ impl Execute {
             },
             opcode::STREAMCHAR => {
                 let l1 = self.l1();
-                iosys::streamchar(self, l1 as u8);
+                iosys::streamchar(self, l1 as u8, false);
             },
             opcode::STREAMNUM => {
                 let l1 = self.l1();
-                iosys::streamnum(self, l1 as i32);
+                iosys::streamnum(self, l1 as i32, false);
             },
             opcode::STREAMSTR => {
                 let l1 = self.l1();
-                iosys::streamstr(self, l1 as usize);
+                iosys::streamstr(self, l1 as usize, false);
             },
             opcode::STREAMUNICHAR => {
                 let l1 = self.l1();
-                iosys::streamunichar(self, l1);
+                iosys::streamunichar(self, l1, false);
             },
             opcode::GESTALT => {
                 let (l1,l2,s1) = self.l1l2s1();
@@ -461,8 +452,8 @@ impl Execute {
                 self.state.reset_mem();
                 self.unstash_protected_range();
                 let start_func = read_u32(&self.state.rom, 24) as usize;
-                self.call_tmp.clear();
-                call::call(self, start_func);
+                self.call_args.clear();
+                call::tailcall(self, start_func);
             },
             opcode::SAVE => {
                 let (l1,s1) = self.l1s1();
@@ -543,59 +534,35 @@ impl Execute {
                 let (l1,s1) = self.l1s1();
                 let addr = l1 as usize;
                 let (dest_type,dest_addr) = s1.result_dest(self);
-                self.call_tmp.clear();
-                match accel::call(self, addr) {
-                    None => {
-                        call::push_stub(&mut self.state, dest_type, dest_addr);
-                        call::call(self, addr);
-                    },
-                    Some(val) => s1.store(self, val),
-                }
+                self.call_args.clear();
+                call::call(self, addr, dest_type, dest_addr);
             },
             opcode::CALLFI => {
                 let (l1,l2,s1) = self.l1l2s1();
                 let addr = l1 as usize;
                 let (dest_type,dest_addr) = s1.result_dest(self);
-                self.call_tmp.clear();
-                self.call_tmp.push(l2);
-                match accel::call(self, addr) {
-                    None => {
-                        call::push_stub(&mut self.state, dest_type, dest_addr);
-                        call::call(self, addr);
-                    },
-                    Some(val) => s1.store(self, val),
-                }
+                self.call_args.clear();
+                self.call_args.push(l2);
+                call::call(self, addr, dest_type, dest_addr);
             },
             opcode::CALLFII => {
                 let (l1,l2,l3,s1) = self.l1l2l3s1();
                 let addr = l1 as usize;
                 let (dest_type,dest_addr) = s1.result_dest(self);
-                self.call_tmp.clear();
-                self.call_tmp.push(l2);
-                self.call_tmp.push(l3);
-                match accel::call(self, addr) {
-                    None => {
-                        call::push_stub(&mut self.state, dest_type, dest_addr);
-                        call::call(self, addr);
-                    },
-                    Some(val) => s1.store(self, val),
-                }
+                self.call_args.clear();
+                self.call_args.push(l2);
+                self.call_args.push(l3);
+                call::call(self, addr, dest_type, dest_addr);
             },
             opcode::CALLFIII => {
                 let (l1,l2,l3,l4,s1) = self.l1l2l3l4s1();
                 let addr = l1 as usize;
                 let (dest_type,dest_addr) = s1.result_dest(self);
-                self.call_tmp.clear();
-                self.call_tmp.push(l2);
-                self.call_tmp.push(l3);
-                self.call_tmp.push(l4);
-                match accel::call(self, addr) {
-                    None => {
-                        call::push_stub(&mut self.state, dest_type, dest_addr);
-                        call::call(self, addr);
-                    },
-                    Some(val) => s1.store(self, val),
-                }
+                self.call_args.clear();
+                self.call_args.push(l2);
+                self.call_args.push(l3);
+                self.call_args.push(l4);
+                call::call(self, addr, dest_type, dest_addr);
             },
             opcode::MZERO => {
                 let (l1,l2) = self.l1l2();

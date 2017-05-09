@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use super::state::read_u32;
 use super::execute::Execute;
 
 const FUNC_1_Z__REGION: u32 = 1;
@@ -47,27 +48,10 @@ impl Accel {
     }
 
     pub fn func(&mut self, func: u32, addr: usize) {
-        match func {
-            0 => {
-                self.funcs.remove(&addr);
-            },
-            FUNC_1_Z__REGION
-                | FUNC_2_CP__TAB
-                | FUNC_3_RA__PR
-                | FUNC_4_RL__PR
-                | FUNC_5_OC__CL
-                | FUNC_6_RV__PR
-                | FUNC_7_OP__PR
-                | FUNC_8_CP__TAB
-                | FUNC_9_RA__PR
-                | FUNC_10_RL__PR
-                | FUNC_11_OC__CL
-                | FUNC_12_RV__PR
-                | FUNC_13_OP__PR
-                => {
-                self.funcs.insert(addr, func);
-            },
-            _ => (),
+        if func == 0 {
+            self.funcs.remove(&addr);
+        } else if supported(func) {
+            self.funcs.insert(addr, func);
         }
     }
 
@@ -102,26 +86,126 @@ pub fn supported(func: u32) -> bool {
             | FUNC_11_OC__CL
             | FUNC_12_RV__PR
             | FUNC_13_OP__PR
-            => true,
+            => false,
         _ => false,
     }
 }
 
-pub fn call(exec: &mut Execute, addr: usize) -> Option<u32> {
+pub fn call(exec: &Execute, addr: usize) -> Option<u32> {
+    let arg0 = exec.call_args.get(0).unwrap_or(&0).clone();
+    let arg1 = exec.call_args.get(1).unwrap_or(&0).clone();
     match exec.accel.funcs.get(&addr) {
-        Some(&FUNC_1_Z__REGION) => unimplemented!(),
-        Some(&FUNC_2_CP__TAB) => unimplemented!(),
-        Some(&FUNC_3_RA__PR) => unimplemented!(),
-        Some(&FUNC_4_RL__PR) => unimplemented!(),
-        Some(&FUNC_5_OC__CL) => unimplemented!(),
-        Some(&FUNC_6_RV__PR) => unimplemented!(),
-        Some(&FUNC_7_OP__PR) => unimplemented!(),
-        Some(&FUNC_8_CP__TAB) => unimplemented!(),
-        Some(&FUNC_9_RA__PR) => unimplemented!(),
-        Some(&FUNC_10_RL__PR) => unimplemented!(),
-        Some(&FUNC_11_OC__CL) => unimplemented!(),
-        Some(&FUNC_12_RV__PR) => unimplemented!(),
-        Some(&FUNC_13_OP__PR) => unimplemented!(),
+        Some(&FUNC_1_Z__REGION) => Some(func_1_z__region(exec, arg0)),
+        Some(&FUNC_2_CP__TAB) => Some(func_2_cp__tab(exec, arg0, arg1)),
+        Some(&FUNC_3_RA__PR) => Some(func_3_ra__pr(exec, arg0, arg1)),
+        Some(&FUNC_4_RL__PR) => Some(func_4_rl__pr(exec, arg0, arg1)),
+        Some(&FUNC_5_OC__CL) => Some(func_5_oc__cl(exec, arg0, arg1)),
+        Some(&FUNC_6_RV__PR) => Some(func_6_rv__pr(exec, arg0, arg1)),
+        Some(&FUNC_7_OP__PR) => Some(func_7_op__pr(exec, arg0, arg1)),
+        Some(&FUNC_8_CP__TAB) => Some(func_8_cp__tab(exec, arg0, arg1)),
+        Some(&FUNC_9_RA__PR) => Some(func_9_ra__pr(exec, arg0, arg1)),
+        Some(&FUNC_10_RL__PR) => Some(func_10_rl__pr(exec, arg0, arg1)),
+        Some(&FUNC_11_OC__CL) => Some(func_11_oc__cl(exec, arg0, arg1)),
+        Some(&FUNC_12_RV__PR) => Some(func_12_rv__pr(exec, arg0, arg1)),
+        Some(&FUNC_13_OP__PR) => Some(func_13_op__pr(exec, arg0, arg1)),
         _ => None,
     }
+}
+
+fn obj_in_class(exec: &Execute, addr: usize) -> bool {
+    exec.accel.class_metaclass == read_u32(&exec.state.mem, addr + 13 + exec.accel.num_attr_bytes as usize)
+}
+
+#[allow(non_snake_case)]
+fn func_1_z__region(exec: &Execute, arg0: u32) -> u32 {
+    let addr = arg0 as usize;
+    if addr < 36 {
+        return 0;
+    }
+    if addr >= exec.state.mem.len() {
+        return 0;
+    }
+    let tb = exec.state.mem[addr];
+    if tb >= 0xe0 {
+        return 3;
+    }
+    if tb >= 0xc0 {
+        return 2;
+    }
+    if tb >= 0x70 && tb <= 0x7f && addr >= read_u32(&exec.state.mem, 8) as usize {
+        return 1;
+    }
+    0
+}
+
+#[allow(non_snake_case)]
+fn func_2_cp__tab(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_3_ra__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_4_rl__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_5_oc__cl(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_6_rv__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_7_op__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_8_cp__tab(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_9_ra__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_10_rl__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_11_oc__cl(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_12_rv__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
+}
+
+#[allow(non_snake_case)]
+fn func_13_op__pr(exec: &Execute, arg0: u32, arg1: u32) -> u32 {
+    let _ = (exec,arg0,arg1,obj_in_class);
+    unimplemented!()
 }

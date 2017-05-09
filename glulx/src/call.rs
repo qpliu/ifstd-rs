@@ -1,4 +1,4 @@
-use super::iosys;
+use super::{accel,iosys};
 use super::state::{read_u32,write_u32,State};
 use super::execute::Execute;
 
@@ -24,6 +24,30 @@ pub const LOCAL_8: u8 = 1;
 pub const LOCAL_16: u8 = 2;
 pub const LOCAL_32: u8 = 4;
 
+pub fn call(exec: &mut Execute, addr: usize, dest_type: u32, dest_addr: u32) {
+    match accel::call(exec, addr) {
+        Some(val) => {
+            ret_result(exec, val, dest_type, dest_addr as usize);
+        },
+        None => {
+            push_stub(&mut exec.state, dest_type, dest_addr);
+            call_func(exec, addr);
+        },
+    }
+}
+
+pub fn tailcall(exec: &mut Execute, addr: usize) -> bool {
+    match accel::call(exec, addr) {
+        Some(val) => {
+            ret(exec, val)
+        },
+        None => {
+            call_func(exec, addr);
+            true
+        },
+    }
+}
+
 pub fn push_stub(state: &mut State, dest_type: u32, dest_addr: u32) {
     state.stack.push(dest_type);
     state.stack.push(dest_addr);
@@ -31,7 +55,7 @@ pub fn push_stub(state: &mut State, dest_type: u32, dest_addr: u32) {
     state.stack.push(state.frame_ptr as u32);
 }
 
-pub fn call(exec: &mut Execute, addr: usize) {
+pub fn call_func(exec: &mut Execute, addr: usize) {
     let func_type = exec.state.mem[addr];
     exec.state.pc = addr + 1;
     let locals_format = exec.state.pc;
@@ -104,24 +128,25 @@ pub fn call(exec: &mut Execute, addr: usize) {
                     _ => panic!("unknown stack local type {:x}", local_type),
                 }
             }
-            let argc = exec.call_tmp.len();
-            exec.state.stack.extend_from_slice(&exec.call_tmp);
+            let argc = exec.call_args.len();
+            exec.state.stack.extend_from_slice(&exec.call_args);
             exec.state.stack.push(argc as u32);
         },
         FUNC_C1 => {
             let mut i = locals_format;
             loop {
                 let local_type = exec.state.mem[i];
-                let local_count = exec.state.mem[i+1];
+                let local_count = exec.state.mem[i+1] as usize;
                 i += 2;
                 match local_type {
                     0 => break,
                     1 => panic!("non 32-bit stack locals deprecated"),
                     2 => panic!("non 32-bit stack locals deprecated"),
                     4 => {
-                        for _ in 0 .. local_count {
-                            exec.state.stack.push(if exec.call_tmp.is_empty() { 0 } else { exec.call_tmp.remove(0) });
+                        if exec.call_args.len() < local_count {
+                            exec.call_args.resize(local_count, 0);
                         }
+                        exec.state.stack.extend(exec.call_args.drain(0 .. local_count));
                     },
                     _ => panic!("unknown stack local type {:x}", local_type),
                 }
@@ -147,6 +172,11 @@ pub fn ret(exec: &mut Execute, val: u32) -> bool {
 
     exec.frame_locals = exec.state.frame_ptr + exec.state.stack[exec.state.frame_ptr+1] as usize / 4;
     exec.frame_end = exec.state.frame_ptr + exec.state.stack[exec.state.frame_ptr] as usize / 4;
+    ret_result(exec, val, dest_type, dest_addr);
+    true
+}
+
+fn ret_result(exec: &mut Execute, val: u32, dest_type: u32, dest_addr: usize) {
     match dest_type {
         DISCARD => (),
         MEM => write_u32(&mut exec.state.mem, dest_addr, val),
@@ -159,5 +189,4 @@ pub fn ret(exec: &mut Execute, val: u32) -> bool {
         RESUME_E2 => iosys::resume_e2(exec),
         _ => panic!("unknown DestType {:x}", dest_type),
     }
-    true
 }
