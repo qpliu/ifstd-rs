@@ -50,7 +50,7 @@ pub fn next_mode(state: &mut State) -> (Mode,Mode) {
 }
 
 impl Mode {
-    pub fn load<G: Glk,GD: GiDispatch>(self, exec: &mut Execute<G,GD>) -> u32 {
+    pub fn load<G: Glk,GD: GiDispatch<G>>(self, exec: &mut Execute<G,GD>) -> u32 {
         match self {
             Mode::Const0 => 0,
             Mode::Const8 => {
@@ -120,7 +120,7 @@ impl Mode {
         }
     }
 
-    pub fn store<G: Glk,GD: GiDispatch>(&self, exec: &mut Execute<G,GD>, val: u32) {
+    pub fn store<G: Glk,GD: GiDispatch<G>>(&self, exec: &mut Execute<G,GD>, val: u32) {
         match self {
             &Mode::Const0 => (),
             &Mode::Mem8 => {
@@ -176,7 +176,7 @@ impl Mode {
         }
     }
 
-    pub fn load8<G: Glk,GD: GiDispatch>(&self, exec: &mut Execute<G,GD>) -> u32 {
+    pub fn load8<G: Glk,GD: GiDispatch<G>>(&self, exec: &mut Execute<G,GD>) -> u32 {
         match self {
             &Mode::Const0 => 0,
             &Mode::Const8 => {
@@ -230,7 +230,7 @@ impl Mode {
         }
     }
 
-    pub fn store8<G: Glk,GD: GiDispatch>(&self, exec: &mut Execute<G,GD>, val: u32) {
+    pub fn store8<G: Glk,GD: GiDispatch<G>>(&self, exec: &mut Execute<G,GD>, val: u32) {
         match self {
             &Mode::Const0 => (),
             &Mode::Mem8 => {
@@ -270,7 +270,7 @@ impl Mode {
         }
     }
 
-    pub fn load16<G: Glk,GD: GiDispatch>(&self, exec: &mut Execute<G,GD>) -> u32 {
+    pub fn load16<G: Glk,GD: GiDispatch<G>>(&self, exec: &mut Execute<G,GD>) -> u32 {
         match self {
             &Mode::Const0 => 0,
             &Mode::Const8 => {
@@ -324,7 +324,7 @@ impl Mode {
         }
     }
 
-    pub fn store16<G: Glk,GD: GiDispatch>(&self, exec: &mut Execute<G,GD>, val: u32) {
+    pub fn store16<G: Glk,GD: GiDispatch<G>>(&self, exec: &mut Execute<G,GD>, val: u32) {
         match self {
             &Mode::Const0 => (),
             &Mode::Mem8 => {
@@ -364,7 +364,7 @@ impl Mode {
         }
     }
 
-    pub fn result_dest<G: Glk,GD: GiDispatch>(&self, exec: &mut Execute<G,GD>) -> (u32,u32) {
+    pub fn result_dest<G: Glk,GD: GiDispatch<G>>(&self, exec: &mut Execute<G,GD>) -> (u32,u32) {
         match self {
             &Mode::Const0 => (call::DISCARD, 0),
             &Mode::Mem8 => {

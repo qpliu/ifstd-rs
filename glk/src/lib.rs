@@ -3,15 +3,15 @@
 pub mod gidispa;
 
 pub trait Glk {
-    fn main();
-    fn exit() -> !;
-    fn tick();
+    fn new() -> Self;
+    fn exit(&self) -> !;
+    fn tick(&mut self);
 
-    fn put_char(ch: u8);
-    fn put_string(s: &[u8]);
-    fn put_buffer(buf: &[u8]);
-    fn put_char_uni(ch: u32);
-    fn put_string_uni(s: &[u32]);
+    fn put_char(&mut self, ch: u8);
+    fn put_string(&mut self, s: &[u8]);
+    fn put_buffer(&mut self, buf: &[u8]);
+    fn put_char_uni(&mut self, ch: u32);
+    fn put_string_uni(&mut self, s: &[u32]);
 }
 
 pub const gestalt_Version: u32 = 0;

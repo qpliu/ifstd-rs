@@ -25,11 +25,12 @@ pub struct Execute<G,GD> {
     pub frame_locals: usize,
     pub frame_end: usize,
 
-    marker: PhantomData<(*const G,*const GD)>,
+    pub gidispa: GD,
+    marker: PhantomData<G>,
 }
 
-impl<G: Glk,GD:GiDispatch> Execute<G,GD> {
-    pub fn new(state: State) -> Self {
+impl<G: Glk, GD: GiDispatch<G>> Execute<G,GD> {
+    pub fn new(state: State, gidispa: GD) -> Self {
         let stringtbl = read_u32(&state.rom, 28) as usize;
         let ram_start = read_u32(&state.rom, 8) as usize;
         Execute{
@@ -48,8 +49,13 @@ impl<G: Glk,GD:GiDispatch> Execute<G,GD> {
             frame_locals: 0,
             frame_end: 0,
 
+            gidispa: gidispa,
             marker: PhantomData,
         }
+    }
+
+    pub fn gidispa(self) -> GD {
+        self.gidispa
     }
 
     pub fn next(&mut self) -> bool {
