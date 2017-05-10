@@ -1,2 +1,2 @@
 [workspace]
-members = ["glulx"]
+members = ["glk","glulx"]

@@ -1,3 +1,4 @@
+extern crate glk;
 extern crate iff;
 extern crate rand;
 

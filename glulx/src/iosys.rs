@@ -1,3 +1,6 @@
+use glk::Glk;
+use glk::gidispa::GiDispatch;
+
 use super::call;
 use super::state::read_u32;
 use super::execute::Execute;
@@ -50,7 +53,7 @@ pub fn supported(mode: u32) -> bool {
     }
 }
 
-pub fn streamchar(exec: &mut Execute, val: u8, within_string: bool) {
+pub fn streamchar<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, val: u8, within_string: bool) {
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -66,11 +69,16 @@ pub fn streamchar(exec: &mut Execute, val: u8, within_string: bool) {
             let addr = exec.iosys.rock as usize;
             call::tailcall(exec, addr);
         },
-        Mode::Glk => unimplemented!(),
+        Mode::Glk => {
+            G::put_char(val);
+            if within_string {
+                call::ret(exec, 0);
+            }
+        },
     }
 }
 
-pub fn streamunichar(exec: &mut Execute, val: u32, within_string: bool) {
+pub fn streamunichar<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, val: u32, within_string: bool) {
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -86,11 +94,16 @@ pub fn streamunichar(exec: &mut Execute, val: u32, within_string: bool) {
             let addr = exec.iosys.rock as usize;
             call::tailcall(exec, addr);
         },
-        Mode::Glk => unimplemented!(),
+        Mode::Glk => {
+            G::put_char_uni(val);
+            if within_string {
+                call::ret(exec, 0);
+            }
+        },
     }
 }
 
-pub fn streamnum(exec: &mut Execute, val: i32, within_string: bool) {
+pub fn streamnum<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, val: i32, within_string: bool) {
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -105,11 +118,22 @@ pub fn streamnum(exec: &mut Execute, val: i32, within_string: bool) {
             call::push_stub(&mut exec.state, call::RESUME_NUM, 0);
             call::ret(exec, 0);
         },
-        Mode::Glk => unimplemented!(),
+        Mode::Glk => {
+            let mut n = val;
+            if n < 0 {
+                G::put_char(b'-');
+                n = -n;
+            }
+            let _ = n;
+            if within_string {
+                call::ret(exec, 0);
+            }
+            unimplemented!();
+        },
     }
 }
 
-pub fn streamstr(exec: &mut Execute, addr: usize, within_string: bool) {
+pub fn streamstr<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, addr: usize, within_string: bool) {
     match exec.state.mem[addr] {
         call::STRING_E0 => stream_e0(exec, addr+1, within_string),
         call::STRING_E1 => stream_e1(exec, addr+1, within_string),
@@ -121,7 +145,7 @@ pub fn streamstr(exec: &mut Execute, addr: usize, within_string: bool) {
     };
 }
 
-fn stream_e0(exec: &mut Execute, addr: usize, within_string: bool) {
+fn stream_e0<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, addr: usize, within_string: bool) {
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -136,11 +160,16 @@ fn stream_e0(exec: &mut Execute, addr: usize, within_string: bool) {
             call::push_stub(&mut exec.state, call::RESUME_E0, 0);
             call::ret(exec, 0);
         },
-        Mode::Glk => unimplemented!(),
+        Mode::Glk => {
+            if within_string {
+                call::ret(exec, 0);
+            }
+            unimplemented!();
+        },
     }
 }
 
-fn stream_e1(exec: &mut Execute, addr: usize, within_string: bool) {
+fn stream_e1<G: Glk, GD: GiDispatch>(exec: &mut Execute<G,GD>, addr: usize, within_string: bool) {
     if !within_string {
         call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
     }
@@ -149,7 +178,7 @@ fn stream_e1(exec: &mut Execute, addr: usize, within_string: bool) {
     call::ret(exec, 0);
 }
 
-fn stream_e2(exec: &mut Execute, addr: usize, within_string: bool) {
+fn stream_e2<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, addr: usize, within_string: bool) {
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -164,11 +193,16 @@ fn stream_e2(exec: &mut Execute, addr: usize, within_string: bool) {
             call::push_stub(&mut exec.state, call::RESUME_E2, 0);
             call::ret(exec, 0);
         },
-        Mode::Glk => unimplemented!(),
+        Mode::Glk => {
+            if within_string {
+                call::ret(exec, 0);
+            }
+            unimplemented!();
+        },
     }
 }
 
-pub fn resume_e0(exec: &mut Execute) {
+pub fn resume_e0<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>) {
     let val = exec.state.mem[exec.state.pc] as u32;
     if val == 0 {
         call::ret(exec, 0);
@@ -181,7 +215,7 @@ pub fn resume_e0(exec: &mut Execute) {
     call::call(exec, addr, call::RESUME_E0, 0);
 }
 
-pub fn resume_e1(exec: &mut Execute, bit_index: u8) {
+pub fn resume_e1<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, bit_index: u8) {
     let mut ptr = exec.stringtbl;
     ptr = read_u32(&exec.state.mem, ptr+8) as usize;
 
@@ -259,7 +293,7 @@ pub fn resume_e1(exec: &mut Execute, bit_index: u8) {
     }
 }
 
-pub fn resume_e2(exec: &mut Execute) {
+pub fn resume_e2<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>) {
     let val = read_u32(&exec.state.mem, exec.state.pc);
     if val == 0 {
         call::ret(exec, 0);
@@ -272,7 +306,7 @@ pub fn resume_e2(exec: &mut Execute) {
     call::call(exec, addr, call::RESUME_E2, 0);
 }
 
-pub fn resume_num(exec: &mut Execute, pos: usize) {
+pub fn resume_num<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, pos: usize) {
     let num = exec.state.pc as i32;
     let size = {
         let mut size = 1;
@@ -315,7 +349,7 @@ pub fn resume_num(exec: &mut Execute, pos: usize) {
     call::call(exec, addr, call::RESUME_NUM, pos as u32 + 1);
 }
 
-pub fn save(exec: &Execute, outstream: u32) -> bool {
+pub fn save<G: Glk,GD: GiDispatch>(exec: &Execute<G,GD>, outstream: u32) -> bool {
     match exec.iosys.mode {
         Mode::Null | Mode::Filter => panic!("{:x}: invalid IO System {:?} for save/restore", exec.state.pc, exec.iosys.mode),
         Mode::Glk => {
@@ -325,7 +359,7 @@ pub fn save(exec: &Execute, outstream: u32) -> bool {
     }
 }
 
-pub fn restore(exec: &mut Execute, instream: u32) -> bool {
+pub fn restore<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, instream: u32) -> bool {
     match exec.iosys.mode {
         Mode::Null | Mode::Filter => panic!("{:x}: invalid IO System {:?} for save/restore", exec.state.pc, exec.iosys.mode),
         Mode::Glk => {

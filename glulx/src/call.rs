@@ -1,3 +1,6 @@
+use glk::Glk;
+use glk::gidispa::GiDispatch;
+
 use super::{accel,iosys};
 use super::state::{read_u32,write_u32,State};
 use super::execute::Execute;
@@ -24,7 +27,7 @@ pub const LOCAL_8: u8 = 1;
 pub const LOCAL_16: u8 = 2;
 pub const LOCAL_32: u8 = 4;
 
-pub fn call(exec: &mut Execute, addr: usize, dest_type: u32, dest_addr: u32) {
+pub fn call<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, addr: usize, dest_type: u32, dest_addr: u32) {
     match accel::call(exec, addr) {
         Some(val) => {
             ret_result(exec, val, dest_type, dest_addr as usize);
@@ -36,7 +39,7 @@ pub fn call(exec: &mut Execute, addr: usize, dest_type: u32, dest_addr: u32) {
     }
 }
 
-pub fn tailcall(exec: &mut Execute, addr: usize) -> bool {
+pub fn tailcall<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, addr: usize) -> bool {
     match accel::call(exec, addr) {
         Some(val) => {
             ret(exec, val)
@@ -55,7 +58,7 @@ pub fn push_stub(state: &mut State, dest_type: u32, dest_addr: u32) {
     state.stack.push(state.frame_ptr as u32);
 }
 
-pub fn call_func(exec: &mut Execute, addr: usize) {
+pub fn call_func<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, addr: usize) {
     let func_type = exec.state.mem[addr];
     exec.state.pc = addr + 1;
     let locals_format = exec.state.pc;
@@ -157,7 +160,7 @@ pub fn call_func(exec: &mut Execute, addr: usize) {
     assert_eq!(exec.state.stack.len(), exec.frame_end);
 }
 
-pub fn ret(exec: &mut Execute, val: u32) -> bool {
+pub fn ret<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, val: u32) -> bool {
     {
         let frame_ptr = exec.state.frame_ptr;
         exec.state.stack.truncate(frame_ptr);
@@ -176,7 +179,7 @@ pub fn ret(exec: &mut Execute, val: u32) -> bool {
     true
 }
 
-fn ret_result(exec: &mut Execute, val: u32, dest_type: u32, dest_addr: usize) {
+fn ret_result<G: Glk,GD: GiDispatch>(exec: &mut Execute<G,GD>, val: u32, dest_type: u32, dest_addr: usize) {
     match dest_type {
         DISCARD => (),
         MEM => write_u32(&mut exec.state.mem, dest_addr, val),

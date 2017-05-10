@@ -5,6 +5,7 @@ version = "0.1.0"
 [dependencies]
 iff-rs = { git = "https://github.com/qpliu/iff-rs" }
 rand = "0.3"
+glk-rs = { path = "../glk", version = "0.1" }
 
 [lib]
 name = "glulx"
