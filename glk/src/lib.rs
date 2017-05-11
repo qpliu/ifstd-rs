@@ -1,16 +1,21 @@
 #![allow(non_upper_case_globals)]
 
+use std::io::{Read,Write};
+
 pub trait Glk {
     type WinId: IdType;
-    type StrId: IdType;
+    type StrId: IdType + Read + Write;
     type FRefId: IdType;
     type SChanId: IdType;
     type Event: EventType<Self::WinId>;
-    type RetainedMem;
+    type TimeVal: TimeValType;
+    type Date: DateType;
+    type RetainedMem8;
+    type RetainedMem32;
 
     fn exit(&self) -> !;
     fn set_interrupt_handler(&self, fn());
-    fn tick(&mut self);
+    fn tick(&self);
 
     fn gestalt(&self, sel: u32, val: u32) -> u32;
     fn gestalt_ext(&self, sel: u32, val: u32, arr: &mut [u32]) -> u32;
@@ -38,21 +43,135 @@ pub trait Glk {
     fn set_window(&self, win: &Self::WinId);
 
     fn stream_open_file(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
-    fn stream_open_memory(&self, buf: Self::RetainedMem, fmode: u32, rock: u32) -> Self::StrId;
+    fn stream_open_memory(&self, buf: Self::RetainedMem8, fmode: u32, rock: u32) -> Self::StrId;
     fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32);
     fn stream_iterate(&self, str: &Self::StrId) -> (Self::StrId,u32);
     fn stream_get_rock(&self, str: &Self::StrId) -> u32;
     fn stream_set_position(&self, str: &Self::StrId, pos: i32, seekmode: u32);
+    fn stream_get_position(&self, str: &Self::StrId) -> u32;
+    fn stream_set_current(&self, str: &Self::StrId);
+    fn stream_get_current(&self) -> Self::StrId;
 
-    fn put_char(&mut self, ch: u8);
-    fn put_string<S: AsRef<[u8]>>(&mut self, s: S);
-    fn put_buffer(&mut self, buf: &[u8]);
-    fn put_char_uni(&mut self, ch: u32);
+    fn put_char(&self, ch: u8);
+    fn put_char_stream(&self, str: &Self::StrId, ch: u8);
+    fn put_string<S: AsRef<[u8]>>(&self, s: S);
+    fn put_string_stream<S: AsRef<[u8]>>(&self, str: &Self::StrId, s: S);
+    fn put_buffer(&self, buf: &[u8]);
+    fn put_buffer_stream(&self, str: &Self::StrId, buf: &[u8]);
+    fn set_style(&self, styl: u32);
+    fn set_style_stream(&self, str: &Self::StrId, styl: u32);
+
+    fn get_char_stream(&self, str: &Self::StrId) -> i32;
+    fn get_line_stream(&self, str: &Self::StrId, buf: &mut [u8]) -> u32;
+    fn get_buffer_stream(&self, str: &Self::StrId, buf: &mut [u8]) -> u32;
+
+    fn stylehint_set(&self, wintype: u32, styl: u32, hint: u32, val: i32);
+    fn stylehint_clear(&self, wintype: u32, styl: u32, hint: u32);
+    fn style_distinguish(&self, win: &Self::WinId, styl1: u32, styl2: u32) -> u32;
+    fn style_measure(&self, win: &Self::WinId, styl: u32, hint: u32) -> (u32,u32);
+
+    fn fileref_create_temp(&self, usage: u32, rock: u32) -> Self::FRefId;
+    fn fileref_create_by_name<S: AsRef<[u8]>>(&self, usage: u32, name: S, rock: u32) -> Self::FRefId;
+    fn fileref_create_by_prompt(&self, usage: u32, fmode: u32, rock: u32) -> Self::FRefId;
+    fn fileref_create_from_fileref(&self, usage: u32, fref: &Self::FRefId, rock: u32) -> Self::FRefId;
+    fn fileref_destroy(&self, fref: &mut Self::FRefId);
+    fn fileref_iterate(&self, fref: &Self::FRefId) -> (Self::FRefId,u32);
+    fn fileref_get_rock(&self, fref: &Self::FRefId) -> u32;
+    fn fileref_delete_file(&self, fref: &Self::FRefId);
+    fn fileref_does_file_exist(&self, fref: &Self::FRefId) -> u32;
+
+    fn select(&self) -> Self::Event;
+    fn select_poll(&self) -> Self::Event;
+
+    fn request_timer_events(&self, millisecs: u32);
+
+    fn request_line_event(&self, win: &Self::WinId, buf: Self::RetainedMem8, initlen: u32);
+    fn request_char_event(&self, win: &Self::WinId);
+    fn request_mouse_event(&self, win: &Self::WinId);
+
+    fn cancel_line_event(&self, win: &Self::WinId) -> Self::Event;
+    fn cancel_char_event(&self, win: &Self::WinId);
+    fn cancel_mouse_event(&self, win: &Self::WinId);
+
+    fn set_echo_line_event(&self, win: &Self::WinId, val: u32);
+
+    fn set_terminators_line_event(&self, win: &Self::WinId, keycodes: &[u32]);
+
+    fn buffer_to_lower_case_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
+    fn buffer_to_upper_case_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
+    fn buffer_to_title_case_uni(&self, buf: &mut [u32], numchars: u32, lowerrest: u32) -> u32;
+
+    fn put_char_uni(&self, ch: u32);
     fn put_string_uni<SU: AsRef<[u32]>>(&mut self, s: SU);
+    fn put_buffer_uni(&self, buf: &[u32]);
+    fn put_char_stream_uni(&self, str: &Self::StrId, ch: u32);
+    fn put_string_stream_uni<SU: AsRef<[u32]>>(&mut self, str: &Self::StrId, s: SU);
+    fn put_buffer_stream_uni(&self, str: &Self::StrId, buf: &[u32]);
+
+    fn get_char_stream_uni(&self, str: &Self::StrId) -> i32;
+    fn get_buffer_stream_uni(&self, str: &Self::StrId, buf: &mut [u32]) -> u32;
+    fn get_line_stream_uni(&self, str: &Self::StrId, buf: &mut [u32]) -> u32;
+
+    fn stream_open_file_uni(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
+    fn stream_open_memory_uni(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
+
+    fn request_char_event_uni(&self, win: &Self::WinId);
+    fn request_line_event_uni(&self, win: &Self::WinId, buf: Self::RetainedMem32, initlen: u32);
+
+    fn buffer_canon_decompose_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
+    fn buffer_canon_normalize_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
+
+    fn image_draw(&self, win: &Self::WinId, image: u32, val1: i32, val2: i32) -> u32;
+    fn image_draw_scaled(&self, win: &Self::WinId, image: u32, val1: i32, val2: i32, width: u32, height: u32) -> u32;
+    fn image_get_info(&self, image: u32) -> (u32,u32);
+
+    fn window_flow_break(&self, win: &Self::WinId);
+
+    fn window_erase_rect(&self, win: &Self::WinId, left: i32, top: i32, width: u32, height: u32);
+    fn window_fill_rect(&self, win: &Self::WinId, color: u32, left: i32, top: i32, width: u32, height: u32);
+    fn window_set_background_color(&self, win: &Self::WinId, color: u32);
+
+    fn schannel_create(&self, rock: u32) -> Self::SChanId;
+    fn schannel_destroy(&self, chan: &mut Self::SChanId);
+    fn schannel_iterate(&self, chan: &Self::SChanId) -> (Self::SChanId,u32);
+    fn schannel_get_rock(&self, chan: &Self::SChanId) -> u32;
+
+    fn schannel_play(&self, chan: &Self::SChanId, snd: u32) -> u32;
+    fn schannel_play_ext(&self, chan: &Self::SChanId, snd: u32, repeat: u32, notify: u32) -> u32;
+    fn schannel_stop(&self, chan: &Self::SChanId);
+    fn schannel_set_volume(&self, chan: &Self::SChanId, vol: u32);
+
+    fn sound_load_hint(&self, snd: u32, flag: u32);
+
+    fn schannel_create_ext(&self, rock: u32, volume: u32) -> Self::SChanId;
+    fn schannel_play_multi(&self, chanarray: &[Self::SChanId], sndarray: &[u32], notify: u32) -> u32;
+    fn schannel_pause(&self, chan: &Self::SChanId);
+    fn schannel_unpause(&self, chan: &Self::SChanId);
+    fn schannel_set_volume_ext(&self, chan: &Self::SChanId, vol: u32, duration: u32, notify: u32);
+
+    fn set_hyperlink(&self, linkval: u32);
+    fn set_hyperlink_stream(&self, str: &Self::StrId, linkval: u32);
+    fn request_hyperlink_event(&self, win: &Self::WinId);
+    fn cancel_hyperlink_event(&self, win: &Self::WinId);
+
+    fn current_time(&self) -> Self::TimeVal;
+    fn current_simple_time(&self, factor: u32) -> i32;
+    fn time_to_date_utc(&self, time: &Self::TimeVal) -> Self::Date;
+    fn time_to_date_local(&self, time: &Self::TimeVal) -> Self::Date;
+    fn simple_time_to_date_utc(&self, time: i32, factor: u32) -> Self::Date;
+    fn simple_time_to_date_local(&self, time: i32, factor: u32) -> Self::Date;
+    fn date_to_time_utc(&self, date: &Self::Date) -> Self::TimeVal;
+    fn date_to_time_local(&self, date: &Self::Date) -> Self::TimeVal;
+    fn date_to_simple_time_utc(&self, date: &Self::Date, factor: u32) -> i32;
+    fn date_to_simple_time_local(&self, date: &Self::Date, factor: u32) -> i32;
+
+    fn stream_open_resource(&self, filenum: u32, rock: u32) -> Self::StrId;
+    fn stream_open_resource_uni(&self, filenum: u32, rock: u32) -> Self::StrId;
 
     // Not sure how to handle this.  For now, just pass in a callback
     // and deal with using static variables to pass back the results.
-    fn retain_mem(&self, mem: Box<[u8]>, rock: u32, on_release: fn(Box<[u8]>,u32)) -> &Self::RetainedMem;
+    fn retain_mem8(&self, mem: Box<[u8]>, rock: u32, on_release: fn(Box<[u8]>,u32)) -> &Self::RetainedMem8;
+    fn retain_mem32(&self, mem: Box<[u32]>, rock: u32, on_release: fn(Box<[u32]>,u32)) -> &Self::RetainedMem32;
 }
 
 pub trait IdType: Eq {
@@ -64,7 +183,25 @@ pub trait IdType: Eq {
 pub trait EventType<WinId> {
     fn evtype(&self) -> u32;
     fn win(&self) -> WinId;
-    fn val(&self) -> (u32,u32);
+    fn val1(&self) -> u32;
+    fn val2(&self) -> u32;
+}
+
+pub trait TimeValType {
+    fn high_sec(&self) -> i32;
+    fn low_sec(&self) -> u32;
+    fn microsec(&self) -> i32;
+}
+
+pub trait DateType {
+    fn year(&self) -> i32;
+    fn month(&self) -> i32;
+    fn day(&self) -> i32;
+    fn weekday(&self) -> i32;
+    fn hour(&self) -> i32;
+    fn minute(&self) -> i32;
+    fn second(&self) -> i32;
+    fn microsec(&self) -> i32;
 }
 
 pub const gestalt_Version: u32 = 0;
