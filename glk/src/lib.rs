@@ -1,17 +1,70 @@
 #![allow(non_upper_case_globals)]
 
-pub mod gidispa;
-
 pub trait Glk {
-    fn new() -> Self;
+    type WinId: IdType;
+    type StrId: IdType;
+    type FRefId: IdType;
+    type SChanId: IdType;
+    type Event: EventType<Self::WinId>;
+    type RetainedMem;
+
     fn exit(&self) -> !;
+    fn set_interrupt_handler(&self, fn());
     fn tick(&mut self);
 
+    fn gestalt(&self, sel: u32, val: u32) -> u32;
+    fn gestalt_ext(&self, sel: u32, val: u32, arr: &mut [u32]) -> u32;
+
+    fn char_to_lower(&self, ch: u8) -> u8;
+    fn char_to_upper(&self, ch: u8) -> u8;
+
+    fn window_get_root(&self) -> Self::WinId;
+    fn window_open(&self, split: &Self::WinId, method: u32, size: u32, wintype: u32, rock: u32) -> Self::WinId;
+    fn window_close(&self, win: &mut Self::WinId) -> (u32,u32);
+    fn window_get_size(&self, win: &Self::WinId) -> (u32,u32);
+    fn window_set_arrangement(&self, win: &Self::WinId, method: u32, size: u32, keywin: &Self::WinId);
+    fn window_get_arrangement(&self, win: &Self::WinId) -> (u32,u32,Self::WinId);
+    fn window_iterate(&self, win: &Self::WinId) -> Self::WinId;
+    fn window_get_rock(&self, win: &Self::WinId) -> u32;
+    fn window_get_type(&self, win: &Self::WinId) -> u32;
+    fn window_get_parent(&self, win: &Self::WinId) -> Self::WinId;
+    fn window_get_sibling(&self, win: &Self::WinId) -> Self::WinId;
+    fn window_clear(&self, win: &Self::WinId);
+    fn window_move_cursor(&self, win: &Self::WinId, xpos: u32, ypos: u32);
+
+    fn window_get_stream(&self, win: &Self::WinId) -> Self::StrId;
+    fn window_set_echo_stream(&self, win: &Self::WinId, str: &Self::StrId);
+    fn window_get_echo_stream(&self, win: &Self::WinId) -> Self::StrId;
+    fn set_window(&self, win: &Self::WinId);
+
+    fn stream_open_file(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
+    fn stream_open_memory(&self, buf: Self::RetainedMem, fmode: u32, rock: u32) -> Self::StrId;
+    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32);
+    fn stream_iterate(&self, str: &Self::StrId) -> (Self::StrId,u32);
+    fn stream_get_rock(&self, str: &Self::StrId) -> u32;
+    fn stream_set_position(&self, str: &Self::StrId, pos: i32, seekmode: u32);
+
     fn put_char(&mut self, ch: u8);
-    fn put_string(&mut self, s: &[u8]);
+    fn put_string<S: AsRef<[u8]>>(&mut self, s: S);
     fn put_buffer(&mut self, buf: &[u8]);
     fn put_char_uni(&mut self, ch: u32);
-    fn put_string_uni(&mut self, s: &[u32]);
+    fn put_string_uni<SU: AsRef<[u32]>>(&mut self, s: SU);
+
+    // Not sure how to handle this.  For now, just pass in a callback
+    // and deal with using static variables to pass back the results.
+    fn retain_mem(&self, mem: Box<[u8]>, rock: u32, on_release: fn(Box<[u8]>,u32)) -> &Self::RetainedMem;
+}
+
+pub trait IdType: Eq {
+    fn null() -> Self;
+    fn is_null(&self) -> bool;
+    fn id(&self) -> u32;
+}
+
+pub trait EventType<WinId> {
+    fn evtype(&self) -> u32;
+    fn win(&self) -> WinId;
+    fn val(&self) -> (u32,u32);
 }
 
 pub const gestalt_Version: u32 = 0;

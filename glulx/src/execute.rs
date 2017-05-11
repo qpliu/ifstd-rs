@@ -1,14 +1,10 @@
-use std::marker::PhantomData;
-
 use rand;
-
 use glk::Glk;
-use glk::gidispa::GiDispatch;
 
 use super::{accel,call,gestalt,iosys,malloc,opcode,operand,search,state};
 use super::state::{read_u16,read_u32,write_u16,write_u32,State};
 
-pub struct Execute<G,GD> {
+pub struct Execute<G> {
     pub state: State,
 
     pub undo_state: state::UndoState<operand::Mode>,
@@ -25,12 +21,11 @@ pub struct Execute<G,GD> {
     pub frame_locals: usize,
     pub frame_end: usize,
 
-    pub gidispa: GD,
-    marker: PhantomData<G>,
+    pub glk: G,
 }
 
-impl<G: Glk, GD: GiDispatch<G>> Execute<G,GD> {
-    pub fn new(state: State, gidispa: GD) -> Self {
+impl<G: Glk> Execute<G> {
+    pub fn new(state: State, glk: G) -> Self {
         let stringtbl = read_u32(&state.rom, 28) as usize;
         let ram_start = read_u32(&state.rom, 8) as usize;
         Execute{
@@ -49,13 +44,8 @@ impl<G: Glk, GD: GiDispatch<G>> Execute<G,GD> {
             frame_locals: 0,
             frame_end: 0,
 
-            gidispa: gidispa,
-            marker: PhantomData,
+            glk: glk,
         }
-    }
-
-    pub fn gidispa(self) -> GD {
-        self.gidispa
     }
 
     pub fn next(&mut self) -> bool {

@@ -106,7 +106,7 @@ pub fn supported(func: u32) -> bool {
     }
 }
 
-pub fn call<G,GD>(exec: &Execute<G,GD>, addr: usize) -> Option<u32> {
+pub fn call<G>(exec: &Execute<G>, addr: usize) -> Option<u32> {
     let arg0 = exec.call_args.get(0).unwrap_or(&0).clone();
     let arg1 = exec.call_args.get(1).unwrap_or(&0).clone();
     match exec.accel.funcs.get(&addr) {
@@ -128,18 +128,18 @@ pub fn call<G,GD>(exec: &Execute<G,GD>, addr: usize) -> Option<u32> {
 }
 
 #[allow(non_snake_case)]
-fn ERROR<G,GD>(exec: &Execute<G,GD>, msg: &'static str) {
+fn ERROR<G>(exec: &Execute<G>, msg: &'static str) {
     let _ = (exec,msg);
     unimplemented!();
 }
 
 #[allow(non_snake_case)]
-fn OBJ_IN_CLASS<G,GD>(exec: &Execute<G,GD>, addr: usize) -> bool {
+fn OBJ_IN_CLASS<G>(exec: &Execute<G>, addr: usize) -> bool {
     exec.accel.class_metaclass == read_u32(&exec.state.mem, addr + 13 + exec.accel.num_attr_bytes as usize)
 }
 
 #[allow(non_snake_case)]
-fn FUNC_1_Z__Region<G,GD>(exec: &Execute<G,GD>, arg0: u32) -> u32 {
+fn FUNC_1_Z__Region<G>(exec: &Execute<G>, arg0: u32) -> u32 {
     let addr = arg0 as usize;
     if addr < 36 {
         return 0;
@@ -161,7 +161,7 @@ fn FUNC_1_Z__Region<G,GD>(exec: &Execute<G,GD>, arg0: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_2_CP__Tab<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_2_CP__Tab<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let id = arg1;
     if FUNC_1_Z__Region(exec, obj as u32) != 1 {
@@ -177,7 +177,7 @@ fn FUNC_2_CP__Tab<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_3_RA__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_3_RA__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let mut obj = arg0 as usize;
     let mut id = arg1;
     let mut cla = 0;
@@ -208,7 +208,7 @@ fn FUNC_3_RA__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_4_RL__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_4_RL__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let mut obj = arg0 as usize;
     let mut id = arg1;
     let mut cla = 0;
@@ -240,7 +240,7 @@ fn FUNC_4_RL__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_5_OC__Cl<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_5_OC__Cl<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let cla = arg1 as usize;
     let zr = FUNC_1_Z__Region(exec, obj as u32);
@@ -300,7 +300,7 @@ fn FUNC_5_OC__Cl<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_6_RV__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_6_RV__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let id = arg1;
     let addr = FUNC_3_RA__Pr(exec, obj as u32, id) as usize;
@@ -315,7 +315,7 @@ fn FUNC_6_RV__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_7_OP__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_7_OP__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let id = arg1;
     let zr = FUNC_1_Z__Region(exec, obj as u32);
@@ -346,7 +346,7 @@ fn FUNC_7_OP__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_8_CP__Tab<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_8_CP__Tab<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let id = arg1;
     if FUNC_1_Z__Region(exec, obj as u32) != 1 {
@@ -362,7 +362,7 @@ fn FUNC_8_CP__Tab<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_9_RA__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_9_RA__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let mut obj = arg0 as usize;
     let mut id = arg1;
     let mut cla = 0;
@@ -393,7 +393,7 @@ fn FUNC_9_RA__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_10_RL__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_10_RL__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let mut obj = arg0 as usize;
     let mut id = arg1;
     let mut cla = 0;
@@ -425,7 +425,7 @@ fn FUNC_10_RL__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_11_OC__Cl<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_11_OC__Cl<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let cla = arg1 as usize;
     let zr = FUNC_1_Z__Region(exec, obj as u32);
@@ -485,7 +485,7 @@ fn FUNC_11_OC__Cl<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_12_RV__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_12_RV__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let id = arg1;
     let addr = FUNC_9_RA__Pr(exec, obj as u32, id) as usize;
@@ -500,7 +500,7 @@ fn FUNC_12_RV__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
 }
 
 #[allow(non_snake_case)]
-fn FUNC_13_OP__Pr<G,GD>(exec: &Execute<G,GD>, arg0: u32, arg1: u32) -> u32 {
+fn FUNC_13_OP__Pr<G>(exec: &Execute<G>, arg0: u32, arg1: u32) -> u32 {
     let obj = arg0 as usize;
     let id = arg1;
     let zr = FUNC_1_Z__Region(exec, obj as u32);
