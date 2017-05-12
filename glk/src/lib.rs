@@ -2,8 +2,6 @@
 
 use std::io::{Read,Write};
 
-pub mod array;
-
 pub trait Glk {
     type WinId: IdType;
     type StrId: IdType + Read + Write;
@@ -12,8 +10,6 @@ pub trait Glk {
     type Event: EventType<Self::WinId>;
     type TimeVal: TimeValType;
     type Date: DateType;
-    type RetainedMem8;
-    type RetainedMem32;
 
     fn exit(&self) -> !;
     fn set_interrupt_handler(&self, handler: fn());
@@ -45,8 +41,8 @@ pub trait Glk {
     fn set_window(&self, win: &Self::WinId);
 
     fn stream_open_file(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
-    fn stream_open_memory(&self, buf: Self::RetainedMem8, fmode: u32, rock: u32) -> Self::StrId;
-    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32);
+    fn stream_open_memory(&self, buf: Box<[u8]>, fmode: u32, rock: u32) -> Self::StrId;
+    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32,Option<Box<[u8]>>);
     fn stream_iterate(&self, str: &Self::StrId) -> (Self::StrId,u32);
     fn stream_get_rock(&self, str: &Self::StrId) -> u32;
     fn stream_set_position(&self, str: &Self::StrId, pos: i32, seekmode: u32);
@@ -87,7 +83,7 @@ pub trait Glk {
 
     fn request_timer_events(&self, millisecs: u32);
 
-    fn request_line_event(&self, win: &Self::WinId, buf: Self::RetainedMem8, initlen: u32);
+    fn request_line_event(&self, win: &Self::WinId, buf: Box<[u8]>, initlen: u32);
     fn request_char_event(&self, win: &Self::WinId);
     fn request_mouse_event(&self, win: &Self::WinId);
 
@@ -118,7 +114,7 @@ pub trait Glk {
     fn stream_open_memory_uni(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
 
     fn request_char_event_uni(&self, win: &Self::WinId);
-    fn request_line_event_uni(&self, win: &Self::WinId, buf: Self::RetainedMem32, initlen: u32);
+    fn request_line_event_uni(&self, win: &Self::WinId, buf: Box<[u32]>, initlen: u32);
 
     fn buffer_canon_decompose_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
     fn buffer_canon_normalize_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
@@ -169,11 +165,6 @@ pub trait Glk {
 
     fn stream_open_resource(&self, filenum: u32, rock: u32) -> Self::StrId;
     fn stream_open_resource_uni(&self, filenum: u32, rock: u32) -> Self::StrId;
-
-    // Not sure how to handle this.  For now, just pass in a callback
-    // and deal with using static variables to pass back the results.
-    fn retain_mem8(&self, mem: Box<[u8]>, rock: u32, on_release: fn(Box<[u8]>,u32)) -> Self::RetainedMem8;
-    fn retain_mem32(&self, mem: Box<[u32]>, rock: u32, on_release: fn(Box<[u32]>,u32)) -> Self::RetainedMem32;
 }
 
 pub trait IdType: Eq {
@@ -187,6 +178,8 @@ pub trait EventType<WinId> {
     fn win(&self) -> WinId;
     fn val1(&self) -> u32;
     fn val2(&self) -> u32;
+    fn buf(&self) -> Option<Box<[u8]>>;
+    fn buf_uni(&self) -> Option<Box<[u32]>>;
 }
 
 pub trait TimeValType {

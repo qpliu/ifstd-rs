@@ -1,6 +1,6 @@
 extern crate glk;
 
-use glk::{array,Glk,EventType,IdType};
+use glk::{Glk,EventType,IdType};
 
 // model.c: Model program for Glk API, version 0.5.
 //  Designed by Andrew Plotkin <erkyrath@eblong.com>
@@ -103,10 +103,7 @@ impl<G: Glk> Model<G> {
             //  are going to stick a null character at the end, so we have to
             //  leave room for that. Note that the Glk library does *not*
             //  put on that null character.
-            let (commandbuf_id,commandbuf_mem) = unsafe {
-                array::register8(&self.glk, commandbuf.take().unwrap())
-            };
-            self.glk.request_line_event(&self.mainwin, commandbuf_mem, 0);
+            self.glk.request_line_event(&self.mainwin, commandbuf.take().unwrap(), 0);
 
             let mut command_len = 0;
             while commandbuf.is_none() {
@@ -122,7 +119,7 @@ impl<G: Glk> Model<G> {
                             //  event comes from the mainwin request. If the
                             //  line event comes from anywhere else, we ignore
                             //  it.
-                            commandbuf = unsafe { array::take8(commandbuf_id) };
+                            commandbuf = ev.buf();
                             command_len = ev.val1() as usize;
                         }
                     },
@@ -219,10 +216,7 @@ impl<G: Glk> Model<G> {
         // This loop is identical to the main command loop in glk_main().
         let mut commandbuf = Some(vec![0u8; 256].into_boxed_slice());
         loop {
-            let (commandbuf_id,commandbuf_mem) = unsafe {
-                array::register8(&self.glk, commandbuf.take().unwrap())
-            };
-            self.glk.request_line_event(&self.mainwin, commandbuf_mem, 0);
+            self.glk.request_line_event(&self.mainwin, commandbuf.take().unwrap(), 0);
 
             let mut command_len = 0;
             while commandbuf.is_none() {
@@ -232,7 +226,7 @@ impl<G: Glk> Model<G> {
                 match ev.evtype() {
                     glk::evtype_LineInput => {
                         if ev.win() == self.mainwin {
-                            commandbuf = unsafe { array::take8(commandbuf_id) };
+                            commandbuf = ev.buf();
                             command_len = ev.val1() as usize;
                         }
                     },

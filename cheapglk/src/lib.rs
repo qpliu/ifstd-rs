@@ -4,23 +4,16 @@ use std::io::{Read,Result,Write};
 
 use glk::{Glk,DateType,EventType,IdType,TimeValType};
 
-static mut MAIN_FUNC: *const u8 = &0;
+mod c_interface;
 
-#[no_mangle]
-pub extern fn glk_main() {
-    let main_func: fn(CheapGlk) = unsafe { std::mem::transmute(MAIN_FUNC) };
-    main_func(CheapGlk{});
-}
+pub use c_interface::glk_main;
 
 pub struct CheapGlk {
 }
 
 impl CheapGlk {
-    pub fn init(main_func: fn(CheapGlk)) -> Result<()> {
-        unsafe {
-            MAIN_FUNC = std::mem::transmute(main_func);
-        }
-        unimplemented!()
+    pub fn init(main_func: fn(CheapGlk), args: Vec<String>) {
+        c_interface::init(main_func, args);
     }
 }
 
@@ -32,8 +25,6 @@ impl Glk for CheapGlk {
     type Event = Event;
     type TimeVal = TimeVal;
     type Date = Date;
-    type RetainedMem8 = RetainedMem8;
-    type RetainedMem32 = RetainedMem32;
 
     fn exit(&self) -> ! {
         unimplemented!()
@@ -162,12 +153,12 @@ impl Glk for CheapGlk {
         unimplemented!()
     }
 
-    fn stream_open_memory(&self, buf: Self::RetainedMem8, fmode: u32, rock: u32) -> Self::StrId {
+    fn stream_open_memory(&self, buf: Box<[u8]>, fmode: u32, rock: u32) -> Self::StrId {
         let _ = (buf,fmode,rock);
         unimplemented!()
     }
 
-    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32) {
+    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32,Option<Box<[u8]>>) {
         let _ = str;
         unimplemented!()
     }
@@ -341,7 +332,7 @@ impl Glk for CheapGlk {
     }
 
 
-    fn request_line_event(&self, win: &Self::WinId, buf: Self::RetainedMem8, initlen: u32) {
+    fn request_line_event(&self, win: &Self::WinId, buf: Box<[u8]>, initlen: u32) {
         let _ = (win,buf,initlen);
         unimplemented!()
     }
@@ -464,7 +455,7 @@ impl Glk for CheapGlk {
         unimplemented!()
     }
 
-    fn request_line_event_uni(&self, win: &Self::WinId, buf: Self::RetainedMem32, initlen: u32) {
+    fn request_line_event_uni(&self, win: &Self::WinId, buf: Box<[u32]>, initlen: u32) {
         let _ = (win,buf,initlen);
         unimplemented!()
     }
@@ -673,17 +664,6 @@ impl Glk for CheapGlk {
         let _ = (filenum,rock);
         unimplemented!()
     }
-
-
-    fn retain_mem8(&self, mem: Box<[u8]>, rock: u32, on_release: fn(Box<[u8]>,u32)) -> Self::RetainedMem8 {
-        let _ = (mem,rock,on_release);
-        unimplemented!()
-    }
-
-    fn retain_mem32(&self, mem: Box<[u32]>, rock: u32, on_release: fn(Box<[u32]>,u32)) -> Self::RetainedMem32 {
-        let _ = (mem,rock,on_release);
-        unimplemented!()
-    }
 }
 
 pub struct WinId {
@@ -831,6 +811,14 @@ impl EventType<WinId> for Event {
     fn val2(&self) -> u32 {
         unimplemented!()
     }
+
+    fn buf(&self) -> Option<Box<[u8]>> {
+        unimplemented!()
+    }
+
+    fn buf_uni(&self) -> Option<Box<[u32]>> {
+        unimplemented!()
+    }
 }
 
 pub struct TimeVal {
@@ -885,10 +873,4 @@ impl DateType for Date {
     fn microsec(&self) -> i32 {
         unimplemented!()
     }
-}
-
-pub struct RetainedMem8 {
-}
-
-pub struct RetainedMem32 {
 }

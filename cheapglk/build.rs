@@ -18,5 +18,6 @@ fn main() {
         .file("cheapglk/gi_blorb.c")
         .file("cheapglk/gi_debug.c")
         .file("cheapglk/cgblorb.c")
+        .file("cheapglk/glkstart.c")
         .compile("libcheapglk.a");
 }
