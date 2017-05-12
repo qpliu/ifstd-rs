@@ -2,6 +2,8 @@
 
 use std::io::{Read,Write};
 
+pub mod array;
+
 pub trait Glk {
     type WinId: IdType;
     type StrId: IdType + Read + Write;
@@ -14,7 +16,7 @@ pub trait Glk {
     type RetainedMem32;
 
     fn exit(&self) -> !;
-    fn set_interrupt_handler(&self, fn());
+    fn set_interrupt_handler(&self, handler: fn());
     fn tick(&self);
 
     fn gestalt(&self, sel: u32, val: u32) -> u32;
@@ -170,8 +172,8 @@ pub trait Glk {
 
     // Not sure how to handle this.  For now, just pass in a callback
     // and deal with using static variables to pass back the results.
-    fn retain_mem8(&self, mem: Box<[u8]>, rock: u32, on_release: fn(Box<[u8]>,u32)) -> &Self::RetainedMem8;
-    fn retain_mem32(&self, mem: Box<[u32]>, rock: u32, on_release: fn(Box<[u32]>,u32)) -> &Self::RetainedMem32;
+    fn retain_mem8(&self, mem: Box<[u8]>, rock: u32, on_release: fn(Box<[u8]>,u32)) -> Self::RetainedMem8;
+    fn retain_mem32(&self, mem: Box<[u32]>, rock: u32, on_release: fn(Box<[u32]>,u32)) -> Self::RetainedMem32;
 }
 
 pub trait IdType: Eq {
