@@ -381,7 +381,7 @@ pub fn resume_num<G: Glk>(exec: &mut Execute<G>, pos: usize) {
     call::call(exec, addr, call::RESUME_NUM, pos as u32 + 1);
 }
 
-pub fn save<G: Glk>(exec: &Execute<G>, outstream: u32) -> bool {
+pub fn save<G: Glk>(exec: &mut Execute<G>, outstream: u32) -> bool {
     match exec.iosys.mode {
         Mode::Null | Mode::Filter => panic!("{:x}: invalid IO System {:?} for save/restore", exec.state.pc, exec.iosys.mode),
         Mode::Glk => {

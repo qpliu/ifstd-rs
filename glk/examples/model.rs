@@ -108,7 +108,7 @@ impl<G: Glk> Model<G> {
             let mut command_len = 0;
             while commandbuf.is_none() {
                 // Grab an event.
-                let ev = self.glk.select();
+                let mut ev = self.glk.select();
                 match ev.evtype() {
                     glk::evtype_LineInput => {
                         if ev.win() == self.mainwin {
@@ -221,7 +221,7 @@ impl<G: Glk> Model<G> {
             let mut command_len = 0;
             while commandbuf.is_none() {
 
-                let ev = self.glk.select();
+                let mut ev = self.glk.select();
 
                 match ev.evtype() {
                     glk::evtype_LineInput => {
