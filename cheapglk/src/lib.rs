@@ -101,8 +101,12 @@ impl Glk for CheapGlk {
     }
 
     fn window_close(&self, win: &mut Self::WinId) -> (u32,u32) {
-        let _ = win;
-        unimplemented!()
+        let mut result = c_interface::stream_result_t { readcount: 0, writecount: 0 };
+        unsafe {
+            c_interface::glk_window_close(win.ptr, &mut result);
+        }
+        win.ptr = std::ptr::null();
+        (result.readcount,result.writecount)
     }
 
     fn window_get_size(&self, win: &Self::WinId) -> (u32,u32) {
@@ -224,8 +228,9 @@ impl Glk for CheapGlk {
 
 
     fn put_char(&self, ch: u8) {
-        let _ = ch;
-        unimplemented!()
+        unsafe {
+            c_interface::glk_put_char(ch as std::os::raw::c_uchar);
+        }
     }
 
     fn put_char_stream(&self, str: &Self::StrId, ch: u8) {
@@ -350,7 +355,13 @@ impl Glk for CheapGlk {
 
 
     fn select(&self) -> Self::Event {
-        unimplemented!()
+        let mut event = c_interface::event_t {
+            evtype: 0, win: std::ptr::null(), val1: 0, val2: 0
+        };
+        unsafe {
+            c_interface::glk_select(&mut event);
+        }
+        Event(event)
     }
 
     fn select_poll(&self) -> Self::Event {
@@ -795,24 +806,23 @@ impl IdType for SChanId {
     }
 }
 
-pub struct Event {
-}
+pub struct Event(c_interface::event_t);
 
 impl EventType<WinId> for Event {
     fn evtype(&self) -> u32 {
-        unimplemented!()
+        self.0.evtype
     }
 
     fn win(&self) -> WinId {
-        unimplemented!()
+        WinId { ptr: self.0.win }
     }
 
     fn val1(&self) -> u32 {
-        unimplemented!()
+        self.0.val1
     }
 
     fn val2(&self) -> u32 {
-        unimplemented!()
+        self.0.val2
     }
 
     fn buf(&self) -> Option<(u32,Box<[u8]>)> {

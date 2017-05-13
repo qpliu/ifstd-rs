@@ -146,7 +146,7 @@ impl<G: Glk> Model<G> {
             // First, if there's a blockquote window open, let's close it.
             //  This ensures that quotes remain visible for exactly one
             //  command.
-            if self.quotewin.is_null() {
+            if !self.quotewin.is_null() {
                 self.glk.window_close(&mut self.quotewin);
             }
 
@@ -253,7 +253,7 @@ impl<G: Glk> Model<G> {
             // First, if there's a blockquote window open, let's close it. 
             //  This ensures that quotes remain visible for exactly one
             //  command.
-            if self.quotewin.is_null() {
+            if !self.quotewin.is_null() {
                 self.glk.window_close(&mut self.quotewin);
             }
         

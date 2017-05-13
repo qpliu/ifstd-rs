@@ -132,6 +132,22 @@ pub enum glk_schannel_struct {}
 #[allow(non_camel_case_types)]
 pub type schanid_t = *const glk_schannel_struct;
 
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct event_t {
+    pub evtype: u32,
+    pub win: winid_t,
+    pub val1: u32,
+    pub val2: u32,
+}
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct stream_result_t {
+    pub readcount: u32,
+    pub writecount: u32,
+}
+
 #[link(name="cheapglk")]
 extern {
     pub fn glk_exit() -> !;
@@ -146,11 +162,14 @@ extern {
 
     pub fn glk_window_get_root() -> winid_t;
     pub fn glk_window_open(split: winid_t, method: u32, size: u32, wintype: u32, rock: u32) -> winid_t;
+    pub fn glk_window_close(win: winid_t, result: *mut stream_result_t);
 
     pub fn glk_set_window(win: winid_t);
 
+    pub fn glk_put_char(c: c_uchar);
     pub fn glk_put_string(s: *const c_char);
     pub fn glk_put_buffer(buf: *const c_char, len: u32);
     pub fn glk_set_style(styl: u32);
     pub fn glk_request_line_event(win: winid_t, buf: *const c_char, maxlen: u32, initlen: u32);
+    pub fn glk_select(event: *mut event_t);
 }
