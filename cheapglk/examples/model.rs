@@ -14,10 +14,10 @@ use glk::{Glk,EventType,IdType};
 //  status window, write to a transcript file, and so on.
 
 fn main() {
-    CheapGlk::init(glk_main, std::env::args().collect());
+    CheapGlk::init(glk_main);
 }
 
-fn glk_main(glk: CheapGlk) {
+fn glk_main(glk: CheapGlk, _: Vec<String>) {
     Model::new(glk).glk_main();
 }
 
@@ -91,7 +91,7 @@ impl<G: Glk> Model<G> {
         self.current_room = 0; // Set initial location.
         self.need_look = true;
 
-        let mut commandbuf = Some(vec![0u8; 256].into_boxed_slice());
+        let mut commandbuf = Some((0,vec![0u8; 256].into_boxed_slice()));
         loop {
             self.draw_statuswin();
 
@@ -154,7 +154,7 @@ impl<G: Glk> Model<G> {
             //  We handle that first.
 
             // Then squash to lower-case.
-            let mut buf = commandbuf.take().unwrap();
+            let mut buf = commandbuf.take().unwrap().1;
             for i in 0 .. command_len {
                 buf[i] = self.glk.char_to_lower(buf[i]);
             }
@@ -183,7 +183,7 @@ impl<G: Glk> Model<G> {
 
                 }
             }
-            commandbuf = Some(buf);
+            commandbuf = Some((0,buf));
         }
     }
 
@@ -224,7 +224,7 @@ impl<G: Glk> Model<G> {
         self.draw_statuswin();
 
         // This loop is identical to the main command loop in glk_main().
-        let mut commandbuf = Some(vec![0u8; 256].into_boxed_slice());
+        let mut commandbuf = Some((0,vec![0u8; 256].into_boxed_slice()));
         loop {
             self.glk.request_line_event(&self.mainwin, commandbuf.take().unwrap(), 0);
 
@@ -258,7 +258,7 @@ impl<G: Glk> Model<G> {
             }
         
             // Then trim whitespace before and after.
-            let buf = commandbuf.take().unwrap();
+            let buf = commandbuf.take().unwrap().1;
             {
                 let cmd = std::str::from_utf8(&buf[0 .. command_len]).unwrap().trim();
 
@@ -271,7 +271,7 @@ impl<G: Glk> Model<G> {
 
                 self.glk.put_string("Please enter \"yes\" or \"no\": ");
             }
-            commandbuf = Some(buf);
+            commandbuf = Some((0,buf));
         }
     }
 

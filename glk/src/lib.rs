@@ -12,7 +12,7 @@ pub trait Glk {
     type Date: DateType;
 
     fn exit(&self) -> !;
-    fn set_interrupt_handler(&self, handler: fn());
+    fn set_interrupt_handler(&self, handler: extern fn());
     fn tick(&self);
 
     fn gestalt(&self, sel: u32, val: u32) -> u32;
@@ -41,8 +41,8 @@ pub trait Glk {
     fn set_window(&self, win: &Self::WinId);
 
     fn stream_open_file(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
-    fn stream_open_memory(&self, buf: Box<[u8]>, fmode: u32, rock: u32) -> Self::StrId;
-    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32,Option<Box<[u8]>>);
+    fn stream_open_memory(&self, buf: (u32,Box<[u8]>), fmode: u32, rock: u32) -> Self::StrId;
+    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32,Option<(u32,Box<[u8]>)>);
     fn stream_iterate(&self, str: &Self::StrId) -> (Self::StrId,u32);
     fn stream_get_rock(&self, str: &Self::StrId) -> u32;
     fn stream_set_position(&self, str: &Self::StrId, pos: i32, seekmode: u32);
@@ -83,7 +83,7 @@ pub trait Glk {
 
     fn request_timer_events(&self, millisecs: u32);
 
-    fn request_line_event(&self, win: &Self::WinId, buf: Box<[u8]>, initlen: u32);
+    fn request_line_event(&self, win: &Self::WinId, buf: (u32,Box<[u8]>), initlen: u32);
     fn request_char_event(&self, win: &Self::WinId);
     fn request_mouse_event(&self, win: &Self::WinId);
 
@@ -114,7 +114,7 @@ pub trait Glk {
     fn stream_open_memory_uni(&self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId;
 
     fn request_char_event_uni(&self, win: &Self::WinId);
-    fn request_line_event_uni(&self, win: &Self::WinId, buf: Box<[u32]>, initlen: u32);
+    fn request_line_event_uni(&self, win: &Self::WinId, buf: (u32,Box<[u32]>), initlen: u32);
 
     fn buffer_canon_decompose_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
     fn buffer_canon_normalize_uni(&self, buf: &mut [u32], numchars: u32) -> u32;
@@ -178,8 +178,8 @@ pub trait EventType<WinId> {
     fn win(&self) -> WinId;
     fn val1(&self) -> u32;
     fn val2(&self) -> u32;
-    fn buf(&self) -> Option<Box<[u8]>>;
-    fn buf_uni(&self) -> Option<Box<[u32]>>;
+    fn buf(&self) -> Option<(u32,Box<[u8]>)>;
+    fn buf_uni(&self) -> Option<(u32,Box<[u32]>)>;
 }
 
 pub trait TimeValType {

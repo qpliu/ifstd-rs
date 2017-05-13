@@ -4,17 +4,34 @@ use std::io::{Read,Result,Write};
 
 use glk::{Glk,DateType,EventType,IdType,TimeValType};
 
+mod array_registry;
 mod c_interface;
 
-pub use c_interface::glk_main;
+pub use c_interface::{glk_main,glkunix_arguments,glkunix_startup_code};
 
 pub struct CheapGlk {
 }
 
 impl CheapGlk {
-    pub fn init(main_func: fn(CheapGlk), args: Vec<String>) {
-        c_interface::init(main_func, args);
+    pub fn set_arguments(args: Vec<Argument>) {
+        c_interface::set_arguments(args);
     }
+
+    pub fn init(main_func: fn(CheapGlk,Vec<String>)) {
+        array_registry::init();
+        c_interface::init(main_func);
+    }
+}
+
+pub enum Argument {
+    ValueFollows(String,String),
+    NoValue(String,String),
+    ValueCanFollow(String,String),
+    NumberValue(String,String),
+}
+
+fn main_func(main_func: fn(CheapGlk,Vec<String>), args: Vec<String>) {
+    main_func(CheapGlk{}, args);
 }
 
 impl Glk for CheapGlk {
@@ -27,48 +44,60 @@ impl Glk for CheapGlk {
     type Date = Date;
 
     fn exit(&self) -> ! {
-        unimplemented!()
+        unsafe {
+            c_interface::glk_exit();
+        }
     }
 
-    fn set_interrupt_handler(&self, handler: fn()) {
-        let _ = handler;
+    fn set_interrupt_handler(&self, handler: extern fn()) {
+        let _ = (handler, c_interface::glk_set_interrupt_handler);
         unimplemented!()
     }
 
     fn tick(&self) {
-        unimplemented!()
+        unsafe {
+            c_interface::glk_tick();
+        }
     }
 
 
     fn gestalt(&self, sel: u32, val: u32) -> u32 {
-        let _ = (sel,val);
-        unimplemented!()
+        unsafe {
+            c_interface::glk_gestalt(sel, val)
+        }
     }
 
     fn gestalt_ext(&self, sel: u32, val: u32, arr: &mut [u32]) -> u32 {
-        let _ = (sel,val,arr);
+        let _ = (sel,val,arr,c_interface::glk_gestalt_ext);
         unimplemented!()
     }
 
 
     fn char_to_lower(&self, ch: u8) -> u8 {
-        let _ = ch;
-        unimplemented!()
+        unsafe {
+            c_interface::glk_char_to_lower(ch as std::os::raw::c_uchar) as u8
+        }
     }
 
     fn char_to_upper(&self, ch: u8) -> u8 {
-        let _ = ch;
-        unimplemented!()
+        unsafe {
+            c_interface::glk_char_to_upper(ch as std::os::raw::c_uchar) as u8
+        }
     }
 
 
     fn window_get_root(&self) -> Self::WinId {
-        unimplemented!()
+        let win = unsafe {
+            c_interface::glk_window_get_root()
+        };
+        WinId{ ptr: win }
     }
 
     fn window_open(&self, split: &Self::WinId, method: u32, size: u32, wintype: u32, rock: u32) -> Self::WinId {
-        let _ = (split,method,size,wintype,rock);
-        unimplemented!()
+        let win = unsafe {
+            c_interface::glk_window_open(split.ptr, method, size, wintype, rock)
+        };
+        WinId{ ptr: win }
     }
 
     fn window_close(&self, win: &mut Self::WinId) -> (u32,u32) {
@@ -143,8 +172,9 @@ impl Glk for CheapGlk {
     }
 
     fn set_window(&self, win: &Self::WinId) {
-        let _ = win;
-        unimplemented!()
+        unsafe {
+            c_interface::glk_set_window(win.ptr);
+        }
     }
 
 
@@ -153,13 +183,13 @@ impl Glk for CheapGlk {
         unimplemented!()
     }
 
-    fn stream_open_memory(&self, buf: Box<[u8]>, fmode: u32, rock: u32) -> Self::StrId {
-        let _ = (buf,fmode,rock);
+    fn stream_open_memory(&self, buf: (u32,Box<[u8]>), fmode: u32, rock: u32) -> Self::StrId {
+        let _ = (buf,fmode,rock,array_registry::register_stream_memory);
         unimplemented!()
     }
 
-    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32,Option<Box<[u8]>>) {
-        let _ = str;
+    fn stream_close(&self, str: &mut Self::StrId) -> (u32,u32,Option<(u32,Box<[u8]>)>) {
+        let _ = (str,array_registry::retrieve_stream_memory);
         unimplemented!()
     }
 
@@ -204,8 +234,8 @@ impl Glk for CheapGlk {
     }
 
     fn put_string<S: AsRef<[u8]>>(&self, s: S) {
-        let _ = s;
-        unimplemented!()
+        let _ = c_interface::glk_put_string;
+        self.put_buffer(s.as_ref());
     }
 
     fn put_string_stream<S: AsRef<[u8]>>(&self, str: &Self::StrId, s: S) {
@@ -214,8 +244,9 @@ impl Glk for CheapGlk {
     }
 
     fn put_buffer(&self, buf: &[u8]) {
-        let _ = buf;
-        unimplemented!()
+        unsafe {
+            c_interface::glk_put_buffer(buf.as_ptr() as *const std::os::raw::c_char, buf.len() as u32);
+        }
     }
 
     fn put_buffer_stream(&self, str: &Self::StrId, buf: &[u8]) {
@@ -224,8 +255,9 @@ impl Glk for CheapGlk {
     }
 
     fn set_style(&self, styl: u32) {
-        let _ = styl;
-        unimplemented!()
+        unsafe {
+            c_interface::glk_set_style(styl);
+        }
     }
 
     fn set_style_stream(&self, str: &Self::StrId, styl: u32) {
@@ -332,9 +364,12 @@ impl Glk for CheapGlk {
     }
 
 
-    fn request_line_event(&self, win: &Self::WinId, buf: Box<[u8]>, initlen: u32) {
-        let _ = (win,buf,initlen);
-        unimplemented!()
+    fn request_line_event(&self, win: &Self::WinId, buf: (u32,Box<[u8]>), initlen: u32) {
+        let maxlen = buf.1.len() as u32;
+        let cbuf = array_registry::register_line_event(buf);
+        unsafe {
+            c_interface::glk_request_line_event(win.ptr, cbuf, maxlen, initlen);
+        }
     }
 
     fn request_char_event(&self, win: &Self::WinId) {
@@ -455,8 +490,8 @@ impl Glk for CheapGlk {
         unimplemented!()
     }
 
-    fn request_line_event_uni(&self, win: &Self::WinId, buf: Box<[u32]>, initlen: u32) {
-        let _ = (win,buf,initlen);
+    fn request_line_event_uni(&self, win: &Self::WinId, buf: (u32,Box<[u32]>), initlen: u32) {
+        let _ = (win,buf,initlen,array_registry::register_line_event_uni);
         unimplemented!()
     }
 
@@ -666,16 +701,18 @@ impl Glk for CheapGlk {
     }
 }
 
+#[derive(Eq,PartialEq)]
 pub struct WinId {
+    ptr: c_interface::winid_t,
 }
 
 impl IdType for WinId {
     fn null() -> Self {
-        unimplemented!()
+        WinId{ ptr: std::ptr::null() }
     }
 
     fn is_null(&self) -> bool {
-        unimplemented!()
+        self.ptr.is_null()
     }
 
     fn id(&self) -> u32 {
@@ -683,39 +720,21 @@ impl IdType for WinId {
     }
 }
 
-impl Eq for WinId {
-}
-
-impl PartialEq for WinId {
-    fn eq(&self, other: &Self) -> bool {
-        let _ = other;
-        unimplemented!()
-    }
-}
-
+#[derive(Eq,PartialEq)]
 pub struct StrId {
+    ptr: c_interface::strid_t,
 }
 
 impl IdType for StrId {
     fn null() -> Self {
-        unimplemented!()
+        StrId{ ptr: std::ptr::null() }
     }
 
     fn is_null(&self) -> bool {
-        unimplemented!()
+        self.ptr.is_null()
     }
 
     fn id(&self) -> u32 {
-        unimplemented!()
-    }
-}
-
-impl Eq for StrId {
-}
-
-impl PartialEq for StrId {
-    fn eq(&self, other: &Self) -> bool {
-        let _ = other;
         unimplemented!()
     }
 }
@@ -738,16 +757,18 @@ impl Write for StrId {
     }
 }
 
+#[derive(Eq,PartialEq)]
 pub struct FRefId {
+    ptr: c_interface::frefid_t,
 }
 
 impl IdType for FRefId {
     fn null() -> Self {
-        unimplemented!()
+        FRefId{ ptr: std::ptr::null() }
     }
 
     fn is_null(&self) -> bool {
-        unimplemented!()
+        self.ptr.is_null()
     }
 
     fn id(&self) -> u32 {
@@ -755,39 +776,21 @@ impl IdType for FRefId {
     }
 }
 
-impl Eq for FRefId {
-}
-
-impl PartialEq for FRefId {
-    fn eq(&self, other: &Self) -> bool {
-        let _ = other;
-        unimplemented!()
-    }
-}
-
+#[derive(Eq,PartialEq)]
 pub struct SChanId {
+    ptr: c_interface::schanid_t,
 }
 
 impl IdType for SChanId {
     fn null() -> Self {
-        unimplemented!()
+        SChanId{ ptr: std::ptr::null() }
     }
 
     fn is_null(&self) -> bool {
-        unimplemented!()
+        self.ptr.is_null()
     }
 
     fn id(&self) -> u32 {
-        unimplemented!()
-    }
-}
-
-impl Eq for SChanId {
-}
-
-impl PartialEq for SChanId {
-    fn eq(&self, other: &Self) -> bool {
-        let _ = other;
         unimplemented!()
     }
 }
@@ -812,12 +815,12 @@ impl EventType<WinId> for Event {
         unimplemented!()
     }
 
-    fn buf(&self) -> Option<Box<[u8]>> {
-        unimplemented!()
+    fn buf(&self) -> Option<(u32,Box<[u8]>)> {
+        array_registry::retrieve_line_event()
     }
 
-    fn buf_uni(&self) -> Option<Box<[u32]>> {
-        unimplemented!()
+    fn buf_uni(&self) -> Option<(u32,Box<[u32]>)> {
+        array_registry::retrieve_line_event_uni()
     }
 }
 
