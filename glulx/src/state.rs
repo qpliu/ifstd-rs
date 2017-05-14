@@ -165,3 +165,36 @@ pub fn write_u16(bytes: &mut Vec<u8>, index: usize, val: u32) {
     bytes[index] = (val >> 8) as u8;
     bytes[index+1] = val as u8;
 }
+
+pub fn read_arr8(bytes: &[u8], index: usize, dest: &mut [u8]) {
+    for i in 0 .. dest.len() {
+        dest[i] = bytes[index+i];
+    }
+}
+
+pub fn write_arr8(bytes: &mut Vec<u8>, index: usize, src: &[u8]) {
+    for i in 0 .. src.len() {
+        bytes[index+i] = src[index];
+    }
+}
+
+pub fn read_arr32(bytes: &[u8], index: usize, dest: &mut [u32]) {
+    for i in 0 .. dest.len() {
+        dest[i] = read_u32(bytes, index+4*i);
+    }
+}
+
+pub fn write_arr32(bytes: &mut Vec<u8>, index: usize, src: &[u32]) {
+    for i in 0 .. src.len() {
+        write_u32(bytes, index+4*i, src[i]);
+    }
+}
+
+pub fn cstr(bytes: &[u8], index: usize) -> &[u8] {
+    for i in index .. bytes.len() {
+        if bytes[i] == 0 {
+            return &bytes[index .. i];
+        }
+    }
+    &bytes[index ..]
+}

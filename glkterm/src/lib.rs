@@ -882,7 +882,7 @@ impl Glk for GlkTerm {
     }
 }
 
-#[derive(Eq,Hash,PartialEq)]
+#[derive(Clone,Eq,Hash,PartialEq)]
 pub struct WinId {
     ptr: c_interface::winid_t,
 }
@@ -897,7 +897,7 @@ impl IdType for WinId {
     }
 }
 
-#[derive(Eq,Hash,PartialEq)]
+#[derive(Clone,Eq,Hash,PartialEq)]
 pub struct StrId {
     ptr: c_interface::strid_t,
 }
@@ -940,7 +940,7 @@ impl Write for StrId {
     }
 }
 
-#[derive(Eq,Hash,PartialEq)]
+#[derive(Clone,Eq,Hash,PartialEq)]
 pub struct FRefId {
     ptr: c_interface::frefid_t,
 }
@@ -955,7 +955,7 @@ impl IdType for FRefId {
     }
 }
 
-#[derive(Eq,Hash,PartialEq)]
+#[derive(Clone,Eq,Hash,PartialEq)]
 pub struct SChanId {
     ptr: c_interface::schanid_t,
 }

@@ -167,7 +167,7 @@ pub trait Glk {
     fn stream_open_resource_uni(&mut self, filenum: u32, rock: u32) -> Self::StrId;
 }
 
-pub trait IdType: Eq + std::hash::Hash {
+pub trait IdType: Clone + Eq + std::hash::Hash {
     fn null() -> Self;
     fn is_null(&self) -> bool;
 }

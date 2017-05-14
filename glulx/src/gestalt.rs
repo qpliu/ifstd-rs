@@ -1,3 +1,5 @@
+use glk::Glk;
+
 use super::{accel,iosys};
 use super::execute::Execute;
 
@@ -14,7 +16,7 @@ const ACCELERATION: u32 = 9;
 const ACCEL_FUNC: u32 = 10;
 const FLOAT: u32 = 11;
 
-pub fn get<G>(exec: &Execute<G>, selector: u32, arg: u32) -> u32 {
+pub fn get<G: Glk>(exec: &Execute<G>, selector: u32, arg: u32) -> u32 {
     match selector {
         GLULX_VERSION => 0x00030102,
         TERP_VERSION => 0x00000100,

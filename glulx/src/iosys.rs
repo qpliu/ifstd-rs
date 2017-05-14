@@ -1,7 +1,8 @@
-use glk::Glk;
+use std::io::{Error,ErrorKind,Result};
+use glk::{Glk,IdType};
 
-use super::call;
-use super::state::read_u32;
+use super::{call,save};
+use super::state::{cstr,read_u32};
 use super::execute::Execute;
 
 const NULL: u32 = 0;
@@ -23,7 +24,11 @@ pub struct IOSys {
 
 impl IOSys {
     pub fn new() -> Self {
-        IOSys{ mode: Mode::Null, rock: 0, tmp: Vec::new() }
+        IOSys{
+            mode: Mode::Null,
+            rock: 0,
+            tmp: Vec::new(),
+        }
     }
 
     pub fn get(&self) -> (u32,u32) {
@@ -172,12 +177,7 @@ fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) {
             call::ret(exec, 0);
         },
         Mode::Glk => {
-            for i in addr .. {
-                if exec.state.mem[i] == 0 {
-                    exec.glk.put_string(&exec.state.mem[addr .. i]);
-                    break;
-                }
-            }
+            exec.glk.put_string(cstr(&exec.state.mem, addr));
             if within_string {
                 call::ret(exec, 0);
             }
@@ -381,22 +381,30 @@ pub fn resume_num<G: Glk>(exec: &mut Execute<G>, pos: usize) {
     call::call(exec, addr, call::RESUME_NUM, pos as u32 + 1);
 }
 
-pub fn save<G: Glk>(exec: &mut Execute<G>, outstream: u32) -> bool {
+pub fn save<G: Glk>(exec: &mut Execute<G>, outstream: u32) -> Result<()> {
     match exec.iosys.mode {
         Mode::Null | Mode::Filter => panic!("{:x}: invalid IO System {:?} for save/restore", exec.state.pc, exec.iosys.mode),
         Mode::Glk => {
-            let _ = outstream;
-            unimplemented!()
+            let mut strid = exec.dispatch.get_strid(outstream);
+            if strid.is_null() {
+                Err(Error::new(ErrorKind::NotFound, "invalid stream id"))
+            } else {
+                save::write(&exec.state, &mut strid)
+            }
         },
     }
 }
 
-pub fn restore<G: Glk>(exec: &mut Execute<G>, instream: u32) -> bool {
+pub fn restore<G: Glk>(exec: &mut Execute<G>, instream: u32) -> Result<()> {
     match exec.iosys.mode {
         Mode::Null | Mode::Filter => panic!("{:x}: invalid IO System {:?} for save/restore", exec.state.pc, exec.iosys.mode),
         Mode::Glk => {
-            let _ = instream;
-            unimplemented!()
+            let mut strid = exec.dispatch.get_strid(instream);
+            if strid.is_null() {
+                Err(Error::new(ErrorKind::NotFound, "invalid stream id"))
+            } else {
+                save::read(&mut exec.state, &mut strid)
+            }
         },
     }
 }

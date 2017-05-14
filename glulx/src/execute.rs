@@ -1,10 +1,10 @@
 use rand;
 use glk::Glk;
 
-use super::{accel,call,gestalt,iosys,malloc,opcode,operand,search,state};
+use super::{accel,call,gestalt,glk_dispatch,iosys,malloc,opcode,operand,search,state};
 use super::state::{read_u16,read_u32,write_u16,write_u32,State};
 
-pub struct Execute<G> {
+pub struct Execute<G: Glk> {
     pub state: State,
 
     pub undo_state: state::UndoState<operand::Mode>,
@@ -15,6 +15,7 @@ pub struct Execute<G> {
     pub call_args: Vec<u32>,
     pub iosys: iosys::IOSys,
     pub accel: accel::Accel,
+    pub dispatch: glk_dispatch::Dispatch<G>,
 
     // Cache repeatedly used values
     pub ram_start: usize,
@@ -39,6 +40,7 @@ impl<G: Glk> Execute<G> {
             call_args: Vec::new(),
             iosys: iosys::IOSys::new(),
             accel: accel::Accel::new(),
+            dispatch: glk_dispatch::Dispatch::new(),
 
             ram_start: ram_start,
             frame_locals: 0,
@@ -245,12 +247,14 @@ impl<G: Glk> Execute<G> {
                 let args = self.state.stack.len() - l2 as usize .. self.state.stack.len();
                 self.call_args.extend(self.state.stack.drain(args));
                 call::call(self, addr, dest_type, dest_addr);
+                self.tick();
             },
             opcode::RETURN => {
                 let l1 = self.l1();
                 if !call::ret(self, l1) {
                     return false;
                 }
+                self.tick();
             },
             opcode::CATCH => {
                 let (s1,l1) = self.s1l1();
@@ -267,6 +271,7 @@ impl<G: Glk> Execute<G> {
                 self.state.stack.truncate(l2 as usize);
                 let return_status = call::ret(self, l1);
                 assert!(return_status, "{:x}:throw {:x} {:x}", self.state.pc, l1, l2);
+                self.tick();
             },
             opcode::TAILCALL => {
                 let (l1,l2) = self.l1l2();
@@ -278,6 +283,7 @@ impl<G: Glk> Execute<G> {
                 if !call::tailcall(self, addr) {
                     return false;
                 }
+                self.tick();
             },
             opcode::COPY => {
                 let (l1,s1) = self.l1s1();
@@ -462,20 +468,20 @@ impl<G: Glk> Execute<G> {
             },
             opcode::SAVE => {
                 let (l1,s1) = self.l1s1();
-                if iosys::save(self, l1) {
-                    s1.store(self, 0);
-                } else {
-                    s1.store(self, 1);
+                match iosys::save(self, l1) {
+                    Ok(()) => s1.store(self, 0),
+                    _ => s1.store(self, 1),
                 }
             },
             opcode::RESTORE => {
                 let (l1,s1) = self.l1s1();
-                if iosys::restore(self, l1) {
-                    if !call::ret(self, 0xffffffff) {
-                        return false;
-                    }
-                } else {
-                    s1.store(self, 1);
+                match iosys::restore(self, l1) {
+                    Ok(()) => {
+                        if !call::ret(self, 0xffffffff) {
+                            return false;
+                        }
+                    },
+                    _ => s1.store(self, 1),
                 }
             },
             opcode::SAVEUNDO => {
@@ -499,7 +505,13 @@ impl<G: Glk> Execute<G> {
                 self.protected_range = (l1 as usize,l2 as usize);
             },
             opcode::GLK => {
-                unimplemented!();
+                let (l1,l2,s1) = self.l1l2s1();
+                self.call_args.clear();
+                for _ in 0 .. l2 {
+                    self.call_args.push(self.state.stack.pop().unwrap());
+                }
+                let result = glk_dispatch::dispatch(self, l1);
+                s1.store(self, result);
             },
             opcode::GETSTRINGTBL => {
                 let s1 = self.s1();
@@ -541,6 +553,7 @@ impl<G: Glk> Execute<G> {
                 let (dest_type,dest_addr) = s1.result_dest(self);
                 self.call_args.clear();
                 call::call(self, addr, dest_type, dest_addr);
+                self.tick();
             },
             opcode::CALLFI => {
                 let (l1,l2,s1) = self.l1l2s1();
@@ -549,6 +562,7 @@ impl<G: Glk> Execute<G> {
                 self.call_args.clear();
                 self.call_args.push(l2);
                 call::call(self, addr, dest_type, dest_addr);
+                self.tick();
             },
             opcode::CALLFII => {
                 let (l1,l2,l3,s1) = self.l1l2l3s1();
@@ -558,6 +572,7 @@ impl<G: Glk> Execute<G> {
                 self.call_args.push(l2);
                 self.call_args.push(l3);
                 call::call(self, addr, dest_type, dest_addr);
+                self.tick();
             },
             opcode::CALLFIII => {
                 let (l1,l2,l3,l4,s1) = self.l1l2l3l4s1();
@@ -568,6 +583,7 @@ impl<G: Glk> Execute<G> {
                 self.call_args.push(l3);
                 self.call_args.push(l4);
                 call::call(self, addr, dest_type, dest_addr);
+                self.tick();
             },
             opcode::MZERO => {
                 let (l1,l2) = self.l1l2();
@@ -896,6 +912,7 @@ impl<G: Glk> Execute<G> {
     }
 
     fn jump(&mut self, offset: u32) -> bool {
+        self.tick();
         match offset {
             0 => call::ret(self, 0),
             1 => call::ret(self, 1),
@@ -917,6 +934,10 @@ impl<G: Glk> Execute<G> {
         for i in 0 .. len {
             self.state.mem[start + i] = self.protected_tmp[i];
         }
+    }
+
+    fn tick(&mut self) {
+        self.glk.tick();
     }
 }
 
