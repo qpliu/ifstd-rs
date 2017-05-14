@@ -14,7 +14,6 @@ pub fn init() {
     unsafe {
         if REGISTRY_INITIALIZED {
             Box::from_raw(REGISTRY);
-            // TODO: drop pending RegistryEntry ptrs: probably by implementing Drop for RegistryEntry
         } else {
             REGISTRY_INITIALIZED = true;
         }
@@ -66,6 +65,17 @@ impl RegistryEntry {
     }
 }
 
+impl Drop for RegistryEntry {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            unsafe {
+                Box::from_raw(self.ptr);
+            }
+            self.ptr = std::ptr::null_mut();
+        }
+    }
+}
+
 enum DispatchRock {
     LineEvent(RegistryEntry),
     LineEventUni(RegistryEntry),
@@ -84,7 +94,7 @@ impl DispatchRock {
     }
 }
 
-extern fn register(buf: *mut c_void, _: u32, _: *const c_char) -> gidispatch_rock_t {
+extern fn register(buf: *mut c_void, _len: u32, _typecode: *const c_char) -> gidispatch_rock_t {
     let mut registry = unsafe { REGISTRY.as_mut().unwrap() };
     if let Some(entry) = registry.pending_line_event.remove(&buf) {
         DispatchRock::LineEvent(entry).rock_t()
@@ -99,7 +109,7 @@ extern fn register(buf: *mut c_void, _: u32, _: *const c_char) -> gidispatch_roc
     }
 }
 
-extern fn unregister(buf: *mut c_void, _: u32, _: *const c_char, rock: gidispatch_rock_t) {
+extern fn unregister(buf: *mut c_void, _len: u32, _typecode: *const c_char, rock: gidispatch_rock_t) {
     let mut registry = unsafe { REGISTRY.as_mut().unwrap() };
     match *DispatchRock::from_rock_t(rock) {
         DispatchRock::LineEvent(entry) => {

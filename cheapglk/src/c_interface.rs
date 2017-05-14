@@ -1,5 +1,5 @@
 use std;
-use std::ffi::CString;
+use std::ffi::{CStr,CString};
 use std::os::raw::{c_char,c_int,c_uchar};
 
 static mut MAIN_FUNC: *const u8 = 0 as *const u8;
@@ -37,6 +37,7 @@ extern {
     fn cheapglk_main(argc: c_int, argv: *const *const c_char);
 }
 
+#[derive(Clone,Copy)]
 #[repr(C)]
 pub struct glkunix_argumentlist_t {
     name: *const c_char,
@@ -55,22 +56,37 @@ const glkunix_arg_ValueCanFollow: c_int = 3;
 #[allow(non_upper_case_globals)]
 const glkunix_arg_NumberValue: c_int = 4;
 
+const GLKUNIX_ARG_COUNT: usize = 10;
+
 #[allow(non_upper_case_globals)]
 #[no_mangle]
-pub static mut glkunix_arguments: *const glkunix_argumentlist_t = &glkunix_argumentlist_t {
-    name: 0 as *const c_char,
-    argtype: glkunix_arg_End,
-    desc: 0 as *const c_char,
-};
-static mut ARGUMENTS_SET: usize = 0;
+pub static mut glkunix_arguments: [glkunix_argumentlist_t; GLKUNIX_ARG_COUNT] = [
+    glkunix_argumentlist_t {
+        name: 0 as *const c_char,
+        argtype: glkunix_arg_End,
+        desc: 0 as *const c_char,
+    }; GLKUNIX_ARG_COUNT ];
 
-pub fn set_arguments(args: Vec<super::Argument>) {
-    if unsafe { ARGUMENTS_SET } > 0 {
-        // TODO: drop previously set glkunix_arguments
+pub fn set_arguments(mut args: Vec<super::Argument>) {
+    unsafe {
+        for i in 0 .. GLKUNIX_ARG_COUNT {
+            let mut arg = &mut glkunix_arguments[i];
+            if arg.argtype != glkunix_arg_End {
+                if !arg.name.is_null() {
+                    CString::from_raw(arg.name as *mut c_char);
+                }
+                if !arg.desc.is_null() {
+                    CString::from_raw(arg.desc as *mut c_char);
+                }
+            }
+            arg.name = std::ptr::null();
+            arg.argtype = glkunix_arg_End;
+            arg.desc = std::ptr::null();
+        }
     }
 
-    let mut list = Vec::new();
-    for arg in args {
+    args.truncate(GLKUNIX_ARG_COUNT-1);
+    for (arg,i) in args.drain(0 ..).zip(0 .. GLKUNIX_ARG_COUNT-1) {
         let (name,argtype,desc) = match arg {
             super::Argument::ValueFollows(name,desc) =>
                 (name,glkunix_arg_ValueFollows,desc),
@@ -81,17 +97,11 @@ pub fn set_arguments(args: Vec<super::Argument>) {
             super::Argument::NumberValue(name,desc) =>
                 (name,glkunix_arg_NumberValue,desc),
         };
-        list.push(glkunix_argumentlist_t{
-                name: CString::new(name).unwrap().as_ptr(),
-                argtype: argtype,
-                desc: CString::new(desc).unwrap().as_ptr(),
-            });
-    }
-    list.push(glkunix_argumentlist_t{ name: 0 as *const c_char, argtype: glkunix_arg_End, desc: 0 as *const c_char });
-
-    unsafe {
-        ARGUMENTS_SET = list.len();
-        glkunix_arguments = list.as_ptr();
+        unsafe {
+            glkunix_arguments[i].name = CString::new(name).unwrap().into_raw();
+            glkunix_arguments[i].argtype = argtype;
+            glkunix_arguments[i].desc = CString::new(desc).unwrap().into_raw();
+        }
     }
 }
 
@@ -105,14 +115,25 @@ static mut STARTUP_ARGS: *const u8 = 0 as *const u8;
 
 #[no_mangle]
 pub extern fn glkunix_startup_code(data: *const glkunix_startup_t) -> c_int {
-    let _ = (data,unsafe { STARTUP_ARGS });
-    // TODO: copy into STARTUP_ARGS
+    let mut args: Vec<String> = Vec::new();
+    unsafe {
+        for i in 0 .. (*data).argc as isize {
+            args.push(CStr::from_ptr(*(*data).argv.offset(i)).to_string_lossy().into_owned());
+        }
+        STARTUP_ARGS = Box::into_raw(Box::new(args)) as *const u8;
+    }
     1
 }
 
 fn startup_args() -> Vec<String> {
-    // TODO: copy out of STARTUP_ARGS
-    vec!()
+    if unsafe { STARTUP_ARGS } == 0 as *const u8 {
+        return Vec::new();
+    }
+    unsafe {
+        let args: Vec<String> = *Box::from_raw(STARTUP_ARGS as *mut Vec<String>);
+        STARTUP_ARGS = 0 as *const u8;
+        args
+    }
 }
 
 #[allow(non_camel_case_types)]

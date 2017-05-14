@@ -17,7 +17,7 @@ fn main() {
     CheapGlk::init(glk_main);
 }
 
-fn glk_main(glk: CheapGlk, _: Vec<String>) {
+fn glk_main(glk: CheapGlk, _args: Vec<String>) {
     Model::new(glk).glk_main();
 }
 
