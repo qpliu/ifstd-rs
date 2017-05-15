@@ -1,8 +1,8 @@
-use glk::{Glk,IdType,EventType};
+use glk::{Glk,DateType,EventType,IdType,TimeValType};
 
 use super::glk_selector;
 use super::execute::Execute;
-use super::state::{cstr,read_arr8,read_arr32,write_arr8,write_arr32,write_u32};
+use super::state::{cstr,read_arr8,read_arr32,read_u32,write_arr8,write_arr32,write_u32};
 
 pub struct Dispatch<G: Glk> {
     winids: Registry<G::WinId>,
@@ -122,29 +122,25 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             0
         },
         glk_selector::GESTALT => {
-            let sel = *exec.call_args.get(0).unwrap();
-            let val = *exec.call_args.get(1).unwrap();
+            let sel = exec.call_args[0];
+            let val = exec.call_args[1];
             exec.glk.gestalt(sel, val)
         },
         glk_selector::GESTALT_EXT => {
-            let sel = *exec.call_args.get(0).unwrap();
-            let val = *exec.call_args.get(1).unwrap();
-            let arr = *exec.call_args.get(2).unwrap_or(&0) as usize;
-            let arrlen = *exec.call_args.get(3).unwrap_or(&0) as usize;
-            let mut buffer = exec.dispatch.get_buffer32(arrlen);
-            read_arr32(&exec.state.mem, arr, &mut buffer);
-            let result = exec.glk.gestalt_ext(sel, val, &mut buffer);
-            write_arr32(&mut exec.state.mem, arr, &buffer);
-            exec.dispatch.put_buffer32(buffer);
+            let sel = exec.call_args[0];
+            let val = exec.call_args[1];
+            let arraddr = exec.call_args[2] as usize;
+            let arrlen = exec.call_args[3] as usize;
+            let mut arr = read_arrayref32(exec, arraddr, arrlen);
+            let result = exec.glk.gestalt_ext(sel, val, &mut arr);
+            write_arrayref32(exec, arraddr, arr);
             result
         },
         glk_selector::WINDOW_ITERATE => {
             let winid = exec.dispatch.winids.get(exec.call_args[0]);
             let rockaddr = exec.call_args[1] as usize;
             let (nextwinid,rock) = exec.glk.window_iterate(&winid);
-            if rockaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, rockaddr, rock);
-            }
+            write_ref(exec, rockaddr, rock);
             exec.dispatch.winids.get_index(nextwinid)
         },
         glk_selector::WINDOW_GET_ROCK => {
@@ -174,12 +170,8 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let widthaddr = *exec.call_args.get(1).unwrap_or(&0) as usize;
             let heightaddr = *exec.call_args.get(2).unwrap_or(&0) as usize;
             let (width,height) = exec.glk.window_get_size(&win);
-            if widthaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, widthaddr, width);
-            }
-            if heightaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, heightaddr, height);
-            }
+            write_ref(exec, widthaddr, width);
+            write_ref(exec, heightaddr, height);
             0
         },
         glk_selector::WINDOW_SET_ARRANGEMENT => {
@@ -196,15 +188,10 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let sizeaddr = *exec.call_args.get(2).unwrap_or(&0) as usize;
             let keywinaddr = *exec.call_args.get(3).unwrap_or(&0) as usize;
             let (method,size,keywin) = exec.glk.window_get_arrangement(&win);
-            if methodaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, methodaddr, method);
-            }
-            if sizeaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, sizeaddr, size);
-            }
-            if keywinaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, keywinaddr, exec.dispatch.winids.get_index(keywin));
-            }
+            write_ref(exec, methodaddr, method);
+            write_ref(exec, sizeaddr, size);
+            let keywinindex = exec.dispatch.winids.get_index(keywin);
+            write_ref(exec, keywinaddr, keywinindex);
             0
         },
         glk_selector::WINDOW_GET_TYPE => {
@@ -258,9 +245,7 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let str = exec.dispatch.strids.get(exec.call_args[0]);
             let rockaddr = exec.call_args[1] as usize;
             let (nextstr,rock) = exec.glk.stream_iterate(&str);
-            if rockaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, rockaddr, rock);
-            }
+            write_ref(exec, rockaddr, rock);
             exec.dispatch.strids.get_index(nextstr)
         },
         glk_selector::STREAM_GET_ROCK => {
@@ -275,37 +260,26 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             exec.dispatch.strids.get_index(str)
         },
         glk_selector::STREAM_OPEN_MEMORY => {
-            let addr = exec.call_args[0] as usize;
+            let bufaddr = exec.call_args[0] as usize;
             let buflen = exec.call_args[1] as usize;
             let fmode = exec.call_args[2];
             let rock = exec.call_args[3];
-            let mut buffer = exec.dispatch.get_buffer8(buflen);
-            read_arr8(&exec.state.mem, addr, &mut buffer);
-            let str = exec.glk.stream_open_memory((addr as u32,buffer), fmode, rock);
+            let buf = exec.dispatch.get_buffer8(buflen);
+            let str = exec.glk.stream_open_memory((bufaddr as u32,buf), fmode, rock);
             exec.dispatch.strids.get_index(str)
         },
         glk_selector::STREAM_CLOSE => {
             let mut str = exec.dispatch.strids.remove(exec.call_args[0]);
-            let readcountaddr = *exec.call_args.get(1).unwrap_or(&0) as usize;
-            let writecountaddr = *exec.call_args.get(1).unwrap_or(&0) as usize;
+            let readcountaddr = exec.call_args[1] as usize;
+            let writecountaddr = exec.call_args[2] as usize;
             let (readcount,writecount,buf8,buf32) = exec.glk.stream_close(&mut str);
-            if readcountaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, readcountaddr, readcount);
+            write_ref(exec, readcountaddr, readcount);
+            write_ref(exec, writecountaddr, writecount);
+            if let Some((addr,arr)) = buf8 {
+                write_arrayref8(exec, addr as usize, arr);
             }
-            if writecountaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, writecountaddr, writecount);
-            }
-            if let Some((addr,buf)) = buf8 {
-                if addr as usize > exec.ram_start {
-                    write_arr8(&mut exec.state.mem, addr as usize, &buf);
-                }
-                exec.dispatch.put_buffer8(buf);
-            }
-            if let Some((addr,buf)) = buf32 {
-                if addr as usize > exec.ram_start {
-                    write_arr32(&mut exec.state.mem, addr as usize, &buf);
-                }
-                exec.dispatch.put_buffer32(buf);
+            if let Some((addr,arr)) = buf32 {
+                write_arrayref32(exec, addr as usize, arr);
             }
             0
         },
@@ -363,11 +337,9 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         glk_selector::FILEREF_ITERATE => {
             let fref = exec.dispatch.frefids.get(exec.call_args[0]);
             let rockaddr = exec.call_args[1] as usize;
-            let (sib,rock) = exec.glk.fileref_iterate(&fref);
-            if rockaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, rockaddr, rock);
-            }
-            exec.dispatch.frefids.get_index(sib)
+            let (nextfileref,rock) = exec.glk.fileref_iterate(&fref);
+            write_ref(exec, rockaddr, rock);
+            exec.dispatch.frefids.get_index(nextfileref)
         },
         glk_selector::FILEREF_GET_ROCK => {
             let fref = exec.dispatch.frefids.get(exec.call_args[0]);
@@ -402,18 +374,21 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         },
         glk_selector::PUT_STRING => {
             let straddr = exec.call_args[0] as usize;
-            exec.glk.put_string(cstr(&exec.state.mem, straddr));
+            assert_eq!(exec.state.mem[straddr], 0xe0);
+            exec.glk.put_string(cstr(&exec.state.mem, straddr+1));
             0
         },
         glk_selector::PUT_STRING_STREAM => {
             let str = exec.dispatch.strids.get(exec.call_args[0]);
             let straddr = exec.call_args[1] as usize;
-            exec.glk.put_string_stream(&str, cstr(&exec.state.mem, straddr));
+            assert_eq!(exec.state.mem[straddr], 0xe0);
+            exec.glk.put_string_stream(&str, cstr(&exec.state.mem, straddr+1));
             0
         },
         glk_selector::PUT_BUFFER => {
             let bufaddr = exec.call_args[0] as usize;
             let buflen = exec.call_args[1] as usize;
+            assert_ne!(bufaddr, 0xffffffff);
             exec.glk.put_buffer(&exec.state.mem[bufaddr .. bufaddr+buflen]);
             0
         },
@@ -421,6 +396,7 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let str = exec.dispatch.strids.get(exec.call_args[0]);
             let bufaddr = exec.call_args[1] as usize;
             let buflen = exec.call_args[2] as usize;
+            assert_ne!(bufaddr, 0xffffffff);
             exec.glk.put_buffer_stream(&str, &exec.state.mem[bufaddr .. bufaddr+buflen]);
             0
         },
@@ -443,13 +419,19 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let str = exec.dispatch.strids.get(exec.call_args[0]);
             let bufaddr = exec.call_args[1] as usize;
             let buflen = exec.call_args[2] as usize;
-            exec.glk.get_line_stream(&str, &mut exec.state.mem[bufaddr .. bufaddr+buflen])
+            let mut arr = read_arrayref8(exec, bufaddr, buflen);
+            let result = exec.glk.get_line_stream(&str, &mut arr);
+            write_arrayref8(exec, bufaddr, arr);
+            result
         },
         glk_selector::GET_BUFFER_STREAM => {
             let str = exec.dispatch.strids.get(exec.call_args[0]);
             let bufaddr = exec.call_args[1] as usize;
             let buflen = exec.call_args[2] as usize;
-            exec.glk.get_buffer_stream(&str, &mut exec.state.mem[bufaddr .. bufaddr+buflen])
+            let mut arr = read_arrayref8(exec, bufaddr, buflen);
+            let result = exec.glk.get_buffer_stream(&str, &mut arr);
+            write_arrayref8(exec, bufaddr, arr);
+            result
         },
         glk_selector::CHAR_TO_LOWER => {
             let ch = exec.call_args[0] as u8;
@@ -486,235 +468,632 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let hint = exec.call_args[2];
             let resultaddr = exec.call_args[3] as usize;
             let (success,result) = exec.glk.style_measure(&win, styl, hint);
-            if resultaddr >= exec.ram_start {
-                write_u32(&mut exec.state.mem, resultaddr, result);
-            }
+            write_ref(exec, resultaddr, result);
             if success { 1 } else { 0 }
         },
         glk_selector::SELECT => {
             let addr = exec.call_args[0] as usize;
+            let len = exec.call_args[1] as usize;
             let event = exec.glk.select();
-            write_event(exec, addr, event);
+            write_event(exec, addr, len, event);
             0
         },
         glk_selector::SELECT_POLL => {
             let addr = exec.call_args[0] as usize;
+            let len = exec.call_args[1] as usize;
             let event = exec.glk.select_poll();
-            write_event(exec, addr, event);
+            write_event(exec, addr, len, event);
             0
         },
         glk_selector::REQUEST_LINE_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let bufaddr = exec.call_args[1] as usize;
+            let buflen = exec.call_args[2] as usize;
+            let initlen = exec.call_args[3];
+            let buf = read_arrayref8(exec, bufaddr, buflen);
+            exec.glk.request_line_event(&win, (bufaddr as u32,buf), initlen);
+            0
         },
         glk_selector::CANCEL_LINE_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let addr = exec.call_args[1] as usize;
+            let len = exec.call_args[2] as usize;
+            let event = exec.glk.cancel_line_event(&win);
+            write_event(exec, addr, len, event);
+            0
         },
         glk_selector::REQUEST_CHAR_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.request_char_event(&win);
+            0
         },
         glk_selector::CANCEL_CHAR_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.cancel_char_event(&win);
+            0
         },
         glk_selector::REQUEST_MOUSE_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.request_mouse_event(&win);
+            0
         },
         glk_selector::CANCEL_MOUSE_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.cancel_mouse_event(&win);
+            0
         },
         glk_selector::REQUEST_TIMER_EVENTS => {
-            unimplemented!()
+            let millisecs = exec.call_args[0];
+            exec.glk.request_timer_events(millisecs);
+            0
         },
         glk_selector::IMAGE_GET_INFO => {
-            unimplemented!()
+            let image = exec.call_args[0];
+            let widthaddr = exec.call_args[1] as usize;
+            let heightaddr = exec.call_args[2] as usize;
+            let (result,width,height) = exec.glk.image_get_info(image);
+            write_ref(exec, widthaddr, width);
+            write_ref(exec, heightaddr, height);
+            if result { 1 } else { 0 }
         },
         glk_selector::IMAGE_DRAW => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let image = exec.call_args[1];
+            let val1 = exec.call_args[2] as i32;
+            let val2 = exec.call_args[3] as i32;
+            if exec.glk.image_draw(&win, image, val1, val2) { 1 } else { 0 }
         },
         glk_selector::IMAGE_DRAW_SCALED => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let image = exec.call_args[1];
+            let val1 = exec.call_args[2] as i32;
+            let val2 = exec.call_args[3] as i32;
+            let width = exec.call_args[4];
+            let height = exec.call_args[5];
+            if exec.glk.image_draw_scaled(&win, image, val1, val2, width, height) { 1 } else { 0 }
         },
         glk_selector::WINDOW_FLOW_BREAK => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.window_flow_break(&win);
+            0
         },
         glk_selector::WINDOW_ERASE_RECT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let left = exec.call_args[1] as i32;
+            let top = exec.call_args[2] as i32;
+            let width = exec.call_args[3];
+            let height = exec.call_args[4];
+            exec.glk.window_erase_rect(&win, left, top, width, height);
+            0
         },
         glk_selector::WINDOW_FILL_RECT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let color = exec.call_args[1];
+            let left = exec.call_args[2] as i32;
+            let top = exec.call_args[3] as i32;
+            let width = exec.call_args[4];
+            let height = exec.call_args[5];
+            exec.glk.window_fill_rect(&win, color, left, top, width, height);
+            0
         },
         glk_selector::WINDOW_SET_BACKGROUND_COLOR => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let color = exec.call_args[1];
+            exec.glk.window_set_background_color(&win, color);
+            0
         },
         glk_selector::SCHANNEL_ITERATE => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            let rockaddr = exec.call_args[1] as usize;
+            let (nextchan,rock) = exec.glk.schannel_iterate(&chan);
+            write_ref(exec, rockaddr, rock);
+            exec.dispatch.schanids.get_index(nextchan)
         },
         glk_selector::SCHANNEL_GET_ROCK => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            exec.glk.schannel_get_rock(&chan)
         },
         glk_selector::SCHANNEL_CREATE => {
             let rock = exec.call_args[0];
-            let schanid = exec.glk.schannel_create(rock);
-            exec.dispatch.schanids.get_index(schanid)
+            let chan = exec.glk.schannel_create(rock);
+            exec.dispatch.schanids.get_index(chan)
         },
         glk_selector::SCHANNEL_DESTROY => {
-            unimplemented!()
+            let mut chan = exec.dispatch.schanids.remove(exec.call_args[0]);
+            exec.glk.schannel_destroy(&mut chan);
+            0
         },
         glk_selector::SCHANNEL_CREATE_EXT => {
-            unimplemented!()
+            let rock = exec.call_args[0];
+            let volume = exec.call_args[1];
+            exec.glk.schannel_create_ext(rock, volume);
+            0
         },
         glk_selector::SCHANNEL_PLAY_MULTI => {
-            unimplemented!()
+            let chanarrayaddr = exec.call_args[0] as usize;
+            let chanarraylen = exec.call_args[1] as usize;
+            let sndarrayaddr = exec.call_args[2] as usize;
+            let sndarraylen = exec.call_args[3] as usize;
+            let notify = exec.call_args[4];
+            let chanarray = read_arrayref32(exec, chanarrayaddr, chanarraylen);
+            let mut chans = Vec::with_capacity(chanarray.len());
+            for chanindex in &chanarray[..] {
+                chans.push(exec.dispatch.schanids.get(*chanindex));
+            }
+            exec.dispatch.put_buffer32(chanarray);
+            let sndarray = read_arrayref32(exec, sndarrayaddr, sndarraylen);
+            exec.glk.schannel_play_multi(&chans, &sndarray, notify);
+            exec.dispatch.put_buffer32(sndarray);
+            0
         },
         glk_selector::SCHANNEL_PLAY => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            let snd = exec.call_args[1];
+            if exec.glk.schannel_play(&chan, snd) { 1 } else { 0 }
         },
         glk_selector::SCHANNEL_PLAY_EXT => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            let snd = exec.call_args[1];
+            let repeat = exec.call_args[2];
+            let notify = exec.call_args[3];
+            if exec.glk.schannel_play_ext(&chan, snd, repeat, notify) { 1 } else { 0 }
         },
         glk_selector::SCHANNEL_STOP => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            exec.glk.schannel_stop(&chan);
+            0
         },
         glk_selector::SCHANNEL_SET_VOLUME => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            let vol = exec.call_args[1];
+            exec.glk.schannel_set_volume(&chan, vol);
+            0
         },
         glk_selector::SOUND_LOAD_HINT => {
-            unimplemented!()
+            let snd = exec.call_args[0];
+            let flag = exec.call_args[1];
+            exec.glk.sound_load_hint(snd, flag);
+            0
         },
         glk_selector::SCHANNEL_SET_VOLUME_EXT => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            let vol = exec.call_args[1];
+            let duration = exec.call_args[2];
+            let notify = exec.call_args[3];
+            exec.glk.schannel_set_volume_ext(&chan, vol, duration, notify);
+            0
         },
         glk_selector::SCHANNEL_PAUSE => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            exec.glk.schannel_pause(&chan);
+            0
         },
         glk_selector::SCHANNEL_UNPAUSE => {
-            unimplemented!()
+            let chan = exec.dispatch.schanids.get(exec.call_args[0]);
+            exec.glk.schannel_unpause(&chan);
+            0
         },
         glk_selector::SET_HYPERLINK => {
-            unimplemented!()
+            let linkval = exec.call_args[0];
+            exec.glk.set_hyperlink(linkval);
+            0
         },
         glk_selector::SET_HYPERLINK_STREAM => {
-            unimplemented!()
+            let str = exec.dispatch.strids.get(exec.call_args[0]);
+            let linkval = exec.call_args[1];
+            exec.glk.set_hyperlink_stream(&str, linkval);
+            0
         },
         glk_selector::REQUEST_HYPERLINK_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.request_hyperlink_event(&win);
+            0
         },
         glk_selector::CANCEL_HYPERLINK_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.cancel_hyperlink_event(&win);
+            0
         },
         glk_selector::BUFFER_TO_LOWER_CASE_UNI => {
-            unimplemented!()
+            let bufaddr = exec.call_args[0] as usize;
+            let buflen = exec.call_args[1] as usize;
+            let numchars = exec.call_args[2];
+            let mut buf = read_arrayref32(exec, bufaddr, buflen);
+            let result = exec.glk.buffer_to_lower_case_uni(&mut buf, numchars);
+            write_arrayref32(exec, bufaddr, buf);
+            result
         },
         glk_selector::BUFFER_TO_UPPER_CASE_UNI => {
-            unimplemented!()
+            let bufaddr = exec.call_args[0] as usize;
+            let buflen = exec.call_args[1] as usize;
+            let numchars = exec.call_args[2];
+            let mut buf = read_arrayref32(exec, bufaddr, buflen);
+            let result = exec.glk.buffer_to_upper_case_uni(&mut buf, numchars);
+            write_arrayref32(exec, bufaddr, buf);
+            result
         },
         glk_selector::BUFFER_TO_TITLE_CASE_UNI => {
-            unimplemented!()
+            let bufaddr = exec.call_args[0] as usize;
+            let buflen = exec.call_args[1] as usize;
+            let numchars = exec.call_args[2];
+            let lowerrest = exec.call_args[3];
+            let mut buf = read_arrayref32(exec, bufaddr, buflen);
+            let result = exec.glk.buffer_to_title_case_uni(&mut buf, numchars, lowerrest);
+            write_arrayref32(exec, bufaddr, buf);
+            result
         },
         glk_selector::BUFFER_CANON_DECOMPOSE_UNI => {
-            unimplemented!()
+            let bufaddr = exec.call_args[0] as usize;
+            let buflen = exec.call_args[1] as usize;
+            let numchars = exec.call_args[2];
+            let mut buf = read_arrayref32(exec, bufaddr, buflen);
+            let result = exec.glk.buffer_canon_decompose_uni(&mut buf, numchars);
+            write_arrayref32(exec, bufaddr, buf);
+            result
         },
         glk_selector::BUFFER_CANON_NORMALIZE_UNI => {
-            unimplemented!()
+            let bufaddr = exec.call_args[0] as usize;
+            let buflen = exec.call_args[1] as usize;
+            let numchars = exec.call_args[2];
+            let mut buf = read_arrayref32(exec, bufaddr, buflen);
+            let result = exec.glk.buffer_canon_normalize_uni(&mut buf, numchars);
+            write_arrayref32(exec, bufaddr, buf);
+            result
         },
         glk_selector::PUT_CHAR_UNI => {
-            unimplemented!()
+            let ch = exec.call_args[0];
+            exec.glk.put_char_uni(ch);
+            0
         },
         glk_selector::PUT_STRING_UNI => {
-            unimplemented!()
+            let straddr = exec.call_args[0] as usize;
+            assert_eq!(exec.state.mem[straddr], 0xe2);
+            let s = read_cstr_uni(exec, straddr+4);
+            exec.glk.put_string_uni(&s);
+            exec.dispatch.put_buffer32(s);
+            0
         },
         glk_selector::PUT_BUFFER_UNI => {
-            unimplemented!()
+            let bufaddr = exec.call_args[0] as usize;
+            let buflen = exec.call_args[1] as usize;
+            let buf = read_arrayref32(exec, bufaddr, buflen);
+            exec.glk.put_buffer_uni(&buf);
+            exec.dispatch.put_buffer32(buf);
+            0
         },
         glk_selector::PUT_CHAR_STREAM_UNI => {
-            unimplemented!()
+            let str = exec.dispatch.strids.get(exec.call_args[0]);
+            let ch = exec.call_args[1];
+            exec.glk.put_char_stream_uni(&str, ch);
+            0
         },
         glk_selector::PUT_STRING_STREAM_UNI => {
-            unimplemented!()
+            let str = exec.dispatch.strids.get(exec.call_args[0]);
+            let straddr = exec.call_args[1] as usize;
+            assert_eq!(exec.state.mem[straddr], 0xe2);
+            let s = read_cstr_uni(exec, straddr+4);
+            exec.glk.put_string_stream_uni(&str, &s);
+            exec.dispatch.put_buffer32(s);
+            0
         },
         glk_selector::PUT_BUFFER_STREAM_UNI => {
-            unimplemented!()
+            let str = exec.dispatch.strids.get(exec.call_args[0]);
+            let bufaddr = exec.call_args[1] as usize;
+            let buflen = exec.call_args[2] as usize;
+            let buf = read_arrayref32(exec, bufaddr, buflen);
+            exec.glk.put_buffer_stream_uni(&str, &buf);
+            exec.dispatch.put_buffer32(buf);
+            0
         },
         glk_selector::GET_CHAR_STREAM_UNI => {
-            unimplemented!()
+            let str = exec.dispatch.strids.get(exec.call_args[0]);
+            exec.glk.get_char_stream_uni(&str) as u32
         },
         glk_selector::GET_BUFFER_STREAM_UNI => {
-            unimplemented!()
+            let str = exec.dispatch.strids.get(exec.call_args[0]);
+            let bufaddr = exec.call_args[1] as usize;
+            let buflen = exec.call_args[2] as usize;
+            let mut buf = exec.dispatch.get_buffer32(buflen);
+            let result = exec.glk.get_buffer_stream_uni(&str, &mut buf);
+            write_arrayref32(exec, bufaddr, buf);
+            result
         },
         glk_selector::GET_LINE_STREAM_UNI => {
-            unimplemented!()
+            let str = exec.dispatch.strids.get(exec.call_args[0]);
+            let bufaddr = exec.call_args[1] as usize;
+            let buflen = exec.call_args[2] as usize;
+            let mut buf = exec.dispatch.get_buffer32(buflen);
+            let result = exec.glk.get_line_stream_uni(&str, &mut buf);
+            write_arrayref32(exec, bufaddr, buf);
+            result
         },
         glk_selector::STREAM_OPEN_FILE_UNI => {
-            unimplemented!()
+            let fileref = exec.dispatch.frefids.get(exec.call_args[0]);
+            let fmode = exec.call_args[1];
+            let rock = exec.call_args[2];
+            let str = exec.glk.stream_open_file_uni(&fileref, fmode, rock);
+            exec.dispatch.strids.get_index(str)
         },
         glk_selector::STREAM_OPEN_MEMORY_UNI => {
-            unimplemented!()
+            let bufaddr = exec.call_args[0] as usize;
+            let buflen = exec.call_args[1] as usize;
+            let fmode = exec.call_args[2];
+            let rock = exec.call_args[3];
+            let buf = exec.dispatch.get_buffer32(buflen);
+            let str = exec.glk.stream_open_memory_uni((bufaddr as u32,buf), fmode, rock);
+            exec.dispatch.strids.get_index(str)
         },
         glk_selector::STREAM_OPEN_RESOURCE_UNI => {
-            unimplemented!()
+            let filenum = exec.call_args[0];
+            let rock = exec.call_args[1];
+            let str = exec.glk.stream_open_resource_uni(filenum, rock);
+            exec.dispatch.strids.get_index(str)
         },
         glk_selector::REQUEST_CHAR_EVENT_UNI => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            exec.glk.request_char_event_uni(&win);
+            0
         },
         glk_selector::REQUEST_LINE_EVENT_UNI => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let bufaddr = exec.call_args[1] as usize;
+            let buflen = exec.call_args[2] as usize;
+            let initlen = exec.call_args[3];
+            let buf = read_arrayref32(exec, bufaddr, buflen);
+            exec.glk.request_line_event_uni(&win, (bufaddr as u32,buf), initlen);
+            0
         },
         glk_selector::SET_ECHO_LINE_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let val = exec.call_args[1];
+            exec.glk.set_echo_line_event(&win, val);
+            0
         },
         glk_selector::SET_TERMINATORS_LINE_EVENT => {
-            unimplemented!()
+            let win = exec.dispatch.winids.get(exec.call_args[0]);
+            let keycodesaddr = exec.call_args[1] as usize;
+            let keycodeslen = exec.call_args[2] as usize;
+            let keycodes = read_arrayref32(exec, keycodesaddr, keycodeslen);
+            exec.glk.set_terminators_line_event(&win, &keycodes);
+            exec.dispatch.put_buffer32(keycodes);
+            0
         },
         glk_selector::CURRENT_TIME => {
-            unimplemented!()
+            let addr = exec.call_args[0] as usize;
+            let len = exec.call_args[1] as usize;
+            let time = exec.glk.current_time();
+            write_time(exec, addr, len, time);
+            0
         },
         glk_selector::CURRENT_SIMPLE_TIME => {
-            unimplemented!()
+            let factor = exec.call_args[0];
+            exec.glk.current_simple_time(factor) as u32
         },
         glk_selector::TIME_TO_DATE_UTC => {
-            unimplemented!()
+            let timeaddr = exec.call_args[0] as usize;
+            let timelen = exec.call_args[1] as usize;
+            let dateaddr = exec.call_args[2] as usize;
+            let datelen = exec.call_args[3] as usize;
+            let time = read_time(exec, timeaddr, timelen);
+            let date = exec.glk.time_to_date_utc(&time);
+            write_date(exec, dateaddr, datelen, date);
+            0
         },
         glk_selector::TIME_TO_DATE_LOCAL => {
-            unimplemented!()
+            let timeaddr = exec.call_args[0] as usize;
+            let timelen = exec.call_args[1] as usize;
+            let dateaddr = exec.call_args[2] as usize;
+            let datelen = exec.call_args[3] as usize;
+            let time = read_time(exec, timeaddr, timelen);
+            let date = exec.glk.time_to_date_local(&time);
+            write_date(exec, dateaddr, datelen, date);
+            0
         },
         glk_selector::SIMPLE_TIME_TO_DATE_UTC => {
-            unimplemented!()
+            let time = exec.call_args[0] as i32;
+            let factor = exec.call_args[1];
+            let dateaddr = exec.call_args[2] as usize;
+            let datelen = exec.call_args[3] as usize;
+            let date = exec.glk.simple_time_to_date_utc(time, factor);
+            write_date(exec, dateaddr, datelen, date);
+            0
         },
         glk_selector::SIMPLE_TIME_TO_DATE_LOCAL => {
-            unimplemented!()
+            let time = exec.call_args[0] as i32;
+            let factor = exec.call_args[1];
+            let dateaddr = exec.call_args[2] as usize;
+            let datelen = exec.call_args[3] as usize;
+            let date = exec.glk.simple_time_to_date_local(time, factor);
+            write_date(exec, dateaddr, datelen, date);
+            0
         },
         glk_selector::DATE_TO_TIME_UTC => {
-            unimplemented!()
+            let dateaddr = exec.call_args[0] as usize;
+            let datelen = exec.call_args[1] as usize;
+            let timeaddr = exec.call_args[2] as usize;
+            let timelen = exec.call_args[3] as usize;
+            let date = read_date(exec, dateaddr, datelen);
+            let time = exec.glk.date_to_time_utc(&date);
+            write_time(exec, timeaddr, timelen, time);
+            0
         },
         glk_selector::DATE_TO_TIME_LOCAL => {
-            unimplemented!()
+            let dateaddr = exec.call_args[0] as usize;
+            let datelen = exec.call_args[1] as usize;
+            let timeaddr = exec.call_args[2] as usize;
+            let timelen = exec.call_args[3] as usize;
+            let date = read_date(exec, dateaddr, datelen);
+            let time = exec.glk.date_to_time_local(&date);
+            write_time(exec, timeaddr, timelen, time);
+            0
         },
         glk_selector::DATE_TO_SIMPLE_TIME_UTC => {
-            unimplemented!()
+            let dateaddr = exec.call_args[0] as usize;
+            let datelen = exec.call_args[1] as usize;
+            let factor = exec.call_args[2];
+            let date = read_date(exec, dateaddr, datelen);
+            exec.glk.date_to_simple_time_utc(&date, factor) as u32
         },
         glk_selector::DATE_TO_SIMPLE_TIME_LOCAL => {
-            unimplemented!()
+            let dateaddr = exec.call_args[0] as usize;
+            let datelen = exec.call_args[1] as usize;
+            let factor = exec.call_args[2];
+            let date = read_date(exec, dateaddr, datelen);
+            exec.glk.date_to_simple_time_local(&date, factor) as u32
         },
         _ => 0,
     }
 }
 
-fn write_event<G: Glk>(exec: &mut Execute<G>, addr: usize, mut event: G::Event) {
-    if addr >= exec.ram_start {
-        write_u32(&mut exec.state.mem, addr, event.evtype());
-        write_u32(&mut exec.state.mem, addr+4, exec.dispatch.winids.get_index(event.win()));
-        write_u32(&mut exec.state.mem, addr+8, event.val1());
-        write_u32(&mut exec.state.mem, addr+12, event.val1());
-    }
-    if let Some((bufaddr,buf)) = event.buf() {
-        if bufaddr as usize > exec.ram_start {
-            write_arr8(&mut exec.state.mem, bufaddr as usize, &buf);
+fn read_arrayref8<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> Box<[u8]> {
+    let mut arr = exec.dispatch.get_buffer8(len);
+    if addr == 0xffffffff {
+        for i in 0 .. len {
+            arr[i] = exec.state.stack.pop().unwrap() as u8;
         }
-        exec.dispatch.put_buffer8(buf);
+    } else {
+        read_arr8(&exec.state.mem, addr, &mut arr);
     }
-    if let Some((bufaddr,buf)) = event.buf_uni() {
-        if bufaddr as usize > exec.ram_start {
-            write_arr32(&mut exec.state.mem, bufaddr as usize, &buf);
+    arr
+}
+
+fn write_arrayref8<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u8]>) {
+    if addr == 0xffffffff {
+        for i in 0 .. arr.len() {
+            exec.state.stack.push(arr[i] as u32);
         }
-        exec.dispatch.put_buffer32(buf);
+    } else if addr >= exec.ram_start {
+        write_arr8(&mut exec.state.mem, addr, &arr);
     }
+    exec.dispatch.put_buffer8(arr);
+}
+
+fn read_arrayref32<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> Box<[u32]> {
+    let mut arr = exec.dispatch.get_buffer32(len);
+    if addr == 0xffffffff {
+        for i in 0 .. len {
+            arr[i] = exec.state.stack.pop().unwrap();
+        }
+    } else {
+        read_arr32(&exec.state.mem, addr, &mut arr);
+    }
+    arr
+}
+
+fn write_arrayref32<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u32]>) {
+    if addr == 0xffffffff {
+        for i in 0 .. arr.len() {
+            exec.state.stack.push(arr[i]);
+        }
+    } else if addr >= exec.ram_start {
+        write_arr32(&mut exec.state.mem, addr, &arr);
+    }
+    exec.dispatch.put_buffer32(arr);
+}
+
+fn read_cstr_uni<G: Glk>(exec: &mut Execute<G>, addr: usize) -> Box<[u32]> {
+    for len in 0 .. {
+        if read_u32(&exec.state.mem, addr + 4*len) == 0 {
+            return read_arrayref32(exec, addr, len);
+        }
+    }
+    read_arrayref32(exec, addr, 0)
+}
+
+
+fn write_ref<G: Glk>(exec: &mut Execute<G>, addr: usize, val: u32) {
+    if addr == 0xffffffff {
+        exec.state.stack.push(val);
+    } else if addr >= exec.ram_start {
+        write_u32(&mut exec.state.mem, addr, val);
+    }
+}
+
+fn write_event<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize, mut event: G::Event) {
+    let mut arr = exec.dispatch.get_buffer32(len);
+    if len > 0 {
+        arr[0] = event.evtype();
+    }
+    if len > 1 {
+        arr[1] = exec.dispatch.winids.get_index(event.win());
+    }
+    if len > 2 {
+        arr[2] = event.val1();
+    }
+    if len > 3 {
+        arr[3] = event.val2();
+    }
+    write_arrayref32(exec, addr, arr);
+    if let Some((addr,arr)) = event.buf() {
+        write_arrayref8(exec, addr as usize, arr);
+    }
+    if let Some((addr,arr)) = event.buf_uni() {
+        write_arrayref32(exec, addr as usize, arr);
+    }
+}
+
+fn read_time<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> G::TimeVal {
+    let arr = read_arrayref32(exec, addr, len);
+    let high_sec = if len > 0 { arr[0] as i32 } else { 0 };
+    let low_sec = if len > 1 { arr[1] } else { 0 };
+    let microsec = if len > 2 { arr[2] as i32 } else { 0 };
+    exec.dispatch.put_buffer32(arr);
+    G::TimeVal::new(high_sec, low_sec, microsec)
+}
+
+fn write_time<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize, time: G::TimeVal) {
+    let mut arr = exec.dispatch.get_buffer32(len);
+    if len > 0 {
+        arr[0] = time.high_sec() as u32;
+    }
+    if len > 1 {
+        arr[1] = time.low_sec();
+    }
+    if len > 2 {
+        arr[2] = time.microsec() as u32;
+    }
+    write_arrayref32(exec, addr, arr);
+}
+
+fn read_date<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> G::Date {
+    let arr = read_arrayref32(exec, addr, len);
+    let year = if len > 0 { arr[0] as i32 } else { 0 };
+    let month = if len > 1 { arr[1] as i32 } else { 0 };
+    let day = if len > 2 { arr[2] as i32 } else { 0 };
+    let weekday = if len > 3 { arr[3] as i32 } else { 0 };
+    let hour = if len > 4 { arr[4] as i32 } else { 0 };
+    let minute = if len > 5 { arr[5] as i32 } else { 0 };
+    let second = if len > 6 { arr[6] as i32 } else { 0 };
+    let microsec = if len > 7 { arr[7] as i32 } else { 0 };
+    exec.dispatch.put_buffer32(arr);
+    G::Date::new(year, month, day, weekday, hour, minute, second, microsec)
+}
+
+fn write_date<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize, date: G::Date) {
+    let mut arr = exec.dispatch.get_buffer32(len);
+    if len > 0 {
+        arr[0] = date.year() as u32;
+    }
+    if len > 1 {
+        arr[1] = date.month() as u32;
+    }
+    if len > 2 {
+        arr[2] = date.day() as u32;
+    }
+    if len > 3 {
+        arr[3] = date.weekday() as u32;
+    }
+    if len > 4 {
+        arr[4] = date.hour() as u32;
+    }
+    if len > 5 {
+        arr[5] = date.minute() as u32;
+    }
+    if len > 6 {
+        arr[6] = date.second() as u32;
+    }
+    if len > 7 {
+        arr[7] = date.microsec() as u32;
+    }
+    write_arrayref32(exec, addr, arr);
 }

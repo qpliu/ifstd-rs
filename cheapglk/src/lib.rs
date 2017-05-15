@@ -1001,6 +1001,10 @@ impl EventType<WinId> for Event {
 pub struct TimeVal(c_interface::glktimeval_t);
 
 impl TimeValType for TimeVal {
+    fn new(high_sec: i32, low_sec: u32, microsec: i32) -> Self {
+        TimeVal(c_interface::glktimeval_t{ high_sec, low_sec, microsec })
+    }
+
     fn high_sec(&self) -> i32 {
         self.0.high_sec
     }
@@ -1017,6 +1021,10 @@ impl TimeValType for TimeVal {
 pub struct Date(c_interface::glkdate_t);
 
 impl DateType for Date {
+    fn new(year: i32, month: i32, day: i32, weekday: i32, hour: i32, minute: i32, second: i32, microsec: i32) -> Self {
+        Date(c_interface::glkdate_t{ year, month, day, weekday, hour, minute, second, microsec })
+    }
+
     fn year(&self) -> i32 {
         self.0.year
     }

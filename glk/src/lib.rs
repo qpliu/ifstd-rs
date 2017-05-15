@@ -182,12 +182,14 @@ pub trait EventType<WinId> {
 }
 
 pub trait TimeValType {
+    fn new(high_sec: i32, low_sec: u32, microsec: i32) -> Self;
     fn high_sec(&self) -> i32;
     fn low_sec(&self) -> u32;
     fn microsec(&self) -> i32;
 }
 
 pub trait DateType {
+    fn new(year: i32, month: i32, day: i32, weekday: i32, hour: i32, minute: i32, second: i32, microsec: i32) -> Self;
     fn year(&self) -> i32;
     fn month(&self) -> i32;
     fn day(&self) -> i32;
