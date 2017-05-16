@@ -11,18 +11,13 @@ mod c_interface;
 
 pub use c_interface::{glk_main,glkunix_arguments,glkunix_startup_code};
 
-pub struct GlkTerm {
+pub fn set_arguments(args: Vec<Argument>) {
+    c_interface::set_arguments(args);
 }
 
-impl GlkTerm {
-    pub fn set_arguments(args: Vec<Argument>) {
-        c_interface::set_arguments(args);
-    }
-
-    pub fn init(main_func: fn(GlkTerm,Vec<String>)) {
-        array_registry::init();
-        c_interface::init(main_func);
-    }
+pub fn init(main_func: fn(GlkTerm,Vec<String>)) {
+    array_registry::init();
+    c_interface::init(main_func);
 }
 
 pub enum Argument {
@@ -34,6 +29,9 @@ pub enum Argument {
 
 fn main_func(main_func: fn(GlkTerm,Vec<String>), args: Vec<String>) {
     main_func(GlkTerm{}, args);
+}
+
+pub struct GlkTerm {
 }
 
 impl Glk for GlkTerm {
@@ -879,6 +877,13 @@ impl Glk for GlkTerm {
     fn stream_open_resource_uni(&mut self, filenum: u32, rock: u32) -> Self::StrId {
         let ptr = unsafe { c_interface::glk_stream_open_resource_uni(filenum, rock) };
         StrId{ ptr }
+    }
+
+
+    fn set_resource_map(&mut self, str: Self::StrId) -> u32 {
+        unsafe {
+            c_interface::giblorb_set_resource_map(str.ptr)
+        }
     }
 }
 

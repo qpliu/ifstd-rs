@@ -1,0 +1,9 @@
+[package]
+name = "grue"
+version = "0.1.0"
+description = "Glulx RUst Execution"
+
+[dependencies]
+glk-rs = { path = "../glk", version = "0.1" }
+cheapglk-rs = { path = "../cheapglk", version = "0.1" }
+glulx-rs = { path = "../glulx", version = "0.1" }

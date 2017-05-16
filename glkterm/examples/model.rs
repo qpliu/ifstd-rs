@@ -14,7 +14,7 @@ use glk::{Glk,EventType,IdType};
 //  status window, write to a transcript file, and so on.
 
 fn main() {
-    GlkTerm::init(glk_main);
+    glkterm::init(glk_main);
 }
 
 fn glk_main(glk: GlkTerm, _args: Vec<String>) {

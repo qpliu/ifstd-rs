@@ -64,13 +64,13 @@ impl State {
         }
         let checksum = read_u32(&rom, 32);
         {
-            let mut sum = 0;
+            let mut sum = 0u32;
             let mut shift = 0;
             for b in &rom {
                 shift = (shift + 24) % 32;
-                sum += (*b as u32) << shift;
+                sum = sum.wrapping_add((*b as u32) << shift);
             }
-            if sum != checksum + checksum {
+            if sum != checksum.wrapping_add(checksum) {
                 return Err(invalid_data("invalid checksum"));
             }
         }

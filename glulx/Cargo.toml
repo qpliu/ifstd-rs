@@ -1,6 +1,7 @@
 [package]
 name = "glulx-rs"
 version = "0.1.0"
+description = "Glulx interpreter"
 
 [dependencies]
 iff-rs = { git = "https://github.com/qpliu/iff-rs" }

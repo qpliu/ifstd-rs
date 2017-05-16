@@ -1,5 +1,4 @@
 extern crate gcc;
-extern crate pkg_config;
 
 fn main() {
     gcc::Config::new()

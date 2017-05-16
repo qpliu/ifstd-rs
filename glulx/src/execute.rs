@@ -29,7 +29,7 @@ impl<G: Glk> Execute<G> {
     pub fn new(state: State, glk: G) -> Self {
         let stringtbl = read_u32(&state.rom, 28) as usize;
         let ram_start = read_u32(&state.rom, 8) as usize;
-        Execute{
+        let mut exec = Execute{
             state: state,
 
             undo_state: state::UndoState::new(),
@@ -47,7 +47,9 @@ impl<G: Glk> Execute<G> {
             frame_end: 0,
 
             glk: glk,
-        }
+        };
+        exec.start();
+        exec
     }
 
     pub fn next(&mut self) -> bool {
@@ -462,9 +464,7 @@ impl<G: Glk> Execute<G> {
                 self.stash_protected_range();
                 self.state.reset_mem();
                 self.unstash_protected_range();
-                let start_func = read_u32(&self.state.rom, 24) as usize;
-                self.call_args.clear();
-                call::tailcall(self, start_func);
+                self.start();
             },
             opcode::SAVE => {
                 let (l1,s1) = self.l1s1();
@@ -793,6 +793,12 @@ impl<G: Glk> Execute<G> {
             },
         }
         true
+    }
+
+    fn start(&mut self) {
+        let start_func = read_u32(&self.state.rom, 24) as usize;
+        self.call_args.clear();
+        call::tailcall(self, start_func);
     }
 
     fn l1(&mut self) -> u32 {

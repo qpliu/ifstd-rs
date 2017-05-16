@@ -130,6 +130,7 @@ pub fn call_func<G: Glk>(exec: &mut Execute<G>, addr: usize) {
                     _ => panic!("unknown stack local type {:x}", local_type),
                 }
             }
+            assert_eq!(exec.state.stack.len(), exec.frame_end);
             let argc = exec.call_args.len();
             exec.state.stack.extend_from_slice(&exec.call_args);
             exec.state.stack.push(argc as u32);
@@ -153,10 +154,10 @@ pub fn call_func<G: Glk>(exec: &mut Execute<G>, addr: usize) {
                     _ => panic!("unknown stack local type {:x}", local_type),
                 }
             }
+            assert_eq!(exec.state.stack.len(), exec.frame_end);
         },
         _ => panic!("unknown function type {:x}", func_type),
     }
-    assert_eq!(exec.state.stack.len(), exec.frame_end);
 }
 
 pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> bool {

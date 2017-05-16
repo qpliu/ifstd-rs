@@ -193,6 +193,9 @@ pub struct glkdate_t {
     pub microsec: i32,
 }
 
+#[allow(non_camel_case_types)]
+pub type giblorb_err_t = u32;
+
 #[link(name="glkterm")]
 extern {
     pub fn glk_exit() -> !;
@@ -349,4 +352,6 @@ extern {
 
     pub fn glk_stream_open_resource(filenum: u32, rock: u32) -> strid_t;
     pub fn glk_stream_open_resource_uni(filenum: u32, rock: u32) -> strid_t;
+
+    pub fn giblorb_set_resource_map(file: strid_t) -> giblorb_err_t;
 }

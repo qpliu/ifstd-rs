@@ -165,6 +165,8 @@ pub trait Glk {
 
     fn stream_open_resource(&mut self, filenum: u32, rock: u32) -> Self::StrId;
     fn stream_open_resource_uni(&mut self, filenum: u32, rock: u32) -> Self::StrId;
+
+    fn set_resource_map(&mut self, str: Self::StrId) -> u32;
 }
 
 pub trait IdType: Clone + Eq + std::hash::Hash {
@@ -334,3 +336,11 @@ pub const stylehint_just_LeftFlush: u32 = 0;
 pub const stylehint_just_LeftRight: u32 = 1;
 pub const stylehint_just_Centered: u32 = 2;
 pub const stylehint_just_RightFlush: u32 = 3;
+
+pub const giblorb_err_None: u32 = 0;
+pub const giblorb_err_CompileTime: u32 = 1;
+pub const giblorb_err_Alloc: u32 = 2;
+pub const giblorb_err_Read: u32 = 3;
+pub const giblorb_err_NotAMap: u32 = 4;
+pub const giblorb_err_Format: u32 = 5;
+pub const giblorb_err_NotFound: u32 = 6;
