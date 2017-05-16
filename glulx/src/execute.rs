@@ -69,6 +69,9 @@ impl<G: Glk> Execute<G> {
             },
             _ => self.state.pc += 1,
         }
+        if cfg!(debug_trace) {
+            super::trace::trace(&self, opcode_addr, opcode);
+        }
         match opcode {
             opcode::NOP => (),
             opcode::ADD => {
@@ -246,8 +249,9 @@ impl<G: Glk> Execute<G> {
                 let addr = l1 as usize;
                 let (dest_type,dest_addr) = s1.result_dest(self);
                 self.call_args.clear();
-                let args = self.state.stack.len() - l2 as usize .. self.state.stack.len();
-                self.call_args.extend(self.state.stack.drain(args));
+                for _ in 0 .. l2 {
+                    self.call_args.push(self.state.stack.pop().unwrap());
+                }
                 call::call(self, addr, dest_type, dest_addr);
                 self.tick();
             },
@@ -279,9 +283,9 @@ impl<G: Glk> Execute<G> {
                 let (l1,l2) = self.l1l2();
                 let addr = l1 as usize;
                 self.call_args.clear();
-                let args = self.state.stack.len() - l2 as usize .. self.state.stack.len();
-                self.call_args.extend_from_slice(&self.state.stack[args]);
-                self.state.stack.truncate(self.state.frame_ptr);
+                for _ in 0 .. l2 {
+                    self.call_args.push(self.state.stack.pop().unwrap());
+                }
                 if !call::tailcall(self, addr) {
                     return false;
                 }
@@ -319,42 +323,48 @@ impl<G: Glk> Execute<G> {
             },
             opcode::ALOAD => {
                 let (l1,l2,s1) = self.l1l2s1();
-                let val = read_u32(&self.state.mem, (l1+4*l2) as usize);
+                let addr = l1.wrapping_add(l2.wrapping_mul(4));
+                let val = read_u32(&self.state.mem, addr as usize);
                 s1.store(self, val);
             },
             opcode::ALOADS => {
                 let (l1,l2,s1) = self.l1l2s1();
-                let val = read_u16(&self.state.mem, (l1+2*l2) as usize);
+                let addr = l1.wrapping_add(l2.wrapping_mul(2));
+                let val = read_u16(&self.state.mem, addr as usize);
                 s1.store(self, val);
             },
             opcode::ALOADB => {
                 let (l1,l2,s1) = self.l1l2s1();
-                let val = self.state.mem[(l1+l2) as usize] as u32;
+                let val = self.state.mem[l1.wrapping_add(l2) as usize] as u32;
                 s1.store(self, val);
             },
             opcode::ALOADBIT => {
                 let (l1,l2,s1) = self.l1l2s1();
-                let val = self.state.mem[(l1+l2/8) as usize];
+                let addr = l1.wrapping_add(l2/8);
+                let val = self.state.mem[addr as usize];
                 s1.store(self, if val & (1 << (l2 % 8) as u8) == 0 { 0 } else { 1 });
             },
             opcode::ASTORE => {
                 let (l1,l2,l3) = self.l1l2l3();
-                write_u32(&mut self.state.mem, (l1+4*l2) as usize, l3);
+                let addr = l1.wrapping_add(l2.wrapping_mul(4));
+                write_u32(&mut self.state.mem, addr as usize, l3);
             },
             opcode::ASTORES => {
                 let (l1,l2,l3) = self.l1l2l3();
-                write_u16(&mut self.state.mem, (l1+2*l2) as usize, l3);
+                let addr = l1.wrapping_add(l2.wrapping_mul(2));
+                write_u16(&mut self.state.mem, addr as usize, l3);
             },
             opcode::ASTOREB => {
                 let (l1,l2,l3) = self.l1l2l3();
-                self.state.mem[(l1+l2) as usize] = l3 as u8;
+                self.state.mem[l1.wrapping_add(l2) as usize] = l3 as u8;
             },
             opcode::ASTOREBIT => {
                 let (l1,l2,l3) = self.l1l2l3();
+                let addr = l1.wrapping_add(l2/8);
                 if l3 == 0 {
-                    self.state.mem[(l1+l2/8) as usize] &= !(1 << (l2 % 8) as u8);
+                    self.state.mem[addr as usize] &= !(1 << (l2 % 8) as u8);
                 } else {
-                    self.state.mem[(l1+l2/8) as usize] |= 1 << (l2 % 8) as u8;
+                    self.state.mem[addr as usize] |= 1 << (l2 % 8) as u8;
                 }
             },
             opcode::STKCOUNT => {
@@ -834,7 +844,8 @@ impl<G: Glk> Execute<G> {
 
     fn l1s1(&mut self) -> (u32,operand::Mode) {
         let (m1,m2) = operand::next_mode(&mut self.state);
-        (m2.load(self), m1)
+        let l1 = m1.load(self);
+        (l1,m2)
     }
 
     fn l1l2s1(&mut self) -> (u32,u32,operand::Mode) {
@@ -923,7 +934,8 @@ impl<G: Glk> Execute<G> {
             0 => call::ret(self, 0),
             1 => call::ret(self, 1),
             _ => {
-                self.state.pc += offset as usize - 2;
+                let pc = self.state.pc as i32 + offset as i32 - 2;
+                self.state.pc = pc as usize & 0xffffffff;
                 true
             }
         }

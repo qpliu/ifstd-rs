@@ -132,7 +132,9 @@ pub fn call_func<G: Glk>(exec: &mut Execute<G>, addr: usize) {
             }
             assert_eq!(exec.state.stack.len(), exec.frame_end);
             let argc = exec.call_args.len();
-            exec.state.stack.extend_from_slice(&exec.call_args);
+            for i in 0 .. argc {
+                exec.state.stack.push(exec.call_args[argc-1-i]);
+            }
             exec.state.stack.push(argc as u32);
         },
         FUNC_C1 => {
@@ -173,8 +175,14 @@ pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> bool {
     let dest_addr = exec.state.stack.pop().unwrap() as usize;
     let dest_type = exec.state.stack.pop().unwrap();
 
-    exec.frame_locals = exec.state.frame_ptr + exec.state.stack[exec.state.frame_ptr+1] as usize / 4;
-    exec.frame_end = exec.state.frame_ptr + exec.state.stack[exec.state.frame_ptr] as usize / 4;
+    match dest_type {
+        DISCARD | MEM | LOCAL | STACK | RESUME_CODE => {
+            exec.frame_locals = exec.state.frame_ptr + exec.state.stack[exec.state.frame_ptr] as usize / 4;
+            exec.frame_end = exec.state.frame_ptr + exec.state.stack[exec.state.frame_ptr+1] as usize / 4;
+        },
+        RESUME_E0 | RESUME_E1 | RESUME_E2 | RESUME_NUM => (),
+        _ => panic!("unknown DestType {:x}", dest_type),
+    }
     ret_result(exec, val, dest_type, dest_addr);
     true
 }

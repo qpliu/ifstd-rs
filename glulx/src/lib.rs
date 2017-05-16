@@ -17,6 +17,7 @@ mod operand;
 mod save;
 mod search;
 mod state;
+mod trace;
 
 pub fn run<G: Glk, R: std::io::Read>(mut glk: G, r: &mut R, resources: Option<G::StrId>) -> (G,Result<(),std::io::Error>) {
     if let Some(res) = resources {

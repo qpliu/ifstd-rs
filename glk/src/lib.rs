@@ -23,7 +23,7 @@ pub trait Glk {
 
     fn window_get_root(&mut self) -> Self::WinId;
     fn window_open(&mut self, split: &Self::WinId, method: u32, size: u32, wintype: u32, rock: u32) -> Self::WinId;
-    fn window_close(&mut self, win: &mut Self::WinId) -> (u32,u32);
+    fn window_close(&mut self, win: &mut Self::WinId) -> (u32,u32,Option<(u32,Box<[u8]>)>,Option<(u32,Box<[u32]>)>);
     fn window_get_size(&mut self, win: &Self::WinId) -> (u32,u32);
     fn window_set_arrangement(&mut self, win: &Self::WinId, method: u32, size: u32, keywin: &Self::WinId);
     fn window_get_arrangement(&mut self, win: &Self::WinId) -> (u32,u32,Self::WinId);

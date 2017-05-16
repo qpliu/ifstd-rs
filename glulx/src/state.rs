@@ -174,7 +174,7 @@ pub fn read_arr8(bytes: &[u8], index: usize, dest: &mut [u8]) {
 
 pub fn write_arr8(bytes: &mut Vec<u8>, index: usize, src: &[u8]) {
     for i in 0 .. src.len() {
-        bytes[index+i] = src[index];
+        bytes[index+i] = src[i];
     }
 }
 

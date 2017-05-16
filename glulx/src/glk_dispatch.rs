@@ -73,6 +73,9 @@ impl<T: IdType> Registry<T> {
     }
 
     fn get(&self, i: u32) -> T {
+        if i == 0 {
+            return T::null();
+        }
         let index = i as usize - 1;
         if index >= self.list.len() {
             T::null()
@@ -162,7 +165,9 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         },
         glk_selector::WINDOW_CLOSE => {
             let mut win = exec.dispatch.winids.remove(exec.call_args[0]);
-            exec.glk.window_close(&mut win);
+            let addr = exec.call_args[1] as usize;
+            let stream_result = exec.glk.window_close(&mut win);
+            write_stream_result(exec, addr, stream_result);
             0
         },
         glk_selector::WINDOW_GET_SIZE => {
@@ -270,17 +275,9 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         },
         glk_selector::STREAM_CLOSE => {
             let mut str = exec.dispatch.strids.remove(exec.call_args[0]);
-            let readcountaddr = exec.call_args[1] as usize;
-            let writecountaddr = exec.call_args[2] as usize;
-            let (readcount,writecount,buf8,buf32) = exec.glk.stream_close(&mut str);
-            write_ref(exec, readcountaddr, readcount);
-            write_ref(exec, writecountaddr, writecount);
-            if let Some((addr,arr)) = buf8 {
-                write_arrayref8(exec, addr as usize, arr);
-            }
-            if let Some((addr,arr)) = buf32 {
-                write_arrayref32(exec, addr as usize, arr);
-            }
+            let addr = exec.call_args[1] as usize;
+            let stream_result = exec.glk.stream_close(&mut str);
+            write_stream_result(exec, addr, stream_result);
             0
         },
         glk_selector::STREAM_SET_POSITION => {
@@ -473,16 +470,14 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         },
         glk_selector::SELECT => {
             let addr = exec.call_args[0] as usize;
-            let len = exec.call_args[1] as usize;
             let event = exec.glk.select();
-            write_event(exec, addr, len, event);
+            write_event(exec, addr, event);
             0
         },
         glk_selector::SELECT_POLL => {
             let addr = exec.call_args[0] as usize;
-            let len = exec.call_args[1] as usize;
             let event = exec.glk.select_poll();
-            write_event(exec, addr, len, event);
+            write_event(exec, addr, event);
             0
         },
         glk_selector::REQUEST_LINE_EVENT => {
@@ -497,9 +492,8 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         glk_selector::CANCEL_LINE_EVENT => {
             let win = exec.dispatch.winids.get(exec.call_args[0]);
             let addr = exec.call_args[1] as usize;
-            let len = exec.call_args[2] as usize;
             let event = exec.glk.cancel_line_event(&win);
-            write_event(exec, addr, len, event);
+            write_event(exec, addr, event);
             0
         },
         glk_selector::REQUEST_CHAR_EVENT => {
@@ -860,9 +854,8 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         },
         glk_selector::CURRENT_TIME => {
             let addr = exec.call_args[0] as usize;
-            let len = exec.call_args[1] as usize;
             let time = exec.glk.current_time();
-            write_time(exec, addr, len, time);
+            write_time(exec, addr, time);
             0
         },
         glk_selector::CURRENT_SIMPLE_TIME => {
@@ -871,74 +864,62 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
         },
         glk_selector::TIME_TO_DATE_UTC => {
             let timeaddr = exec.call_args[0] as usize;
-            let timelen = exec.call_args[1] as usize;
-            let dateaddr = exec.call_args[2] as usize;
-            let datelen = exec.call_args[3] as usize;
-            let time = read_time(exec, timeaddr, timelen);
+            let dateaddr = exec.call_args[1] as usize;
+            let time = read_time(exec, timeaddr);
             let date = exec.glk.time_to_date_utc(&time);
-            write_date(exec, dateaddr, datelen, date);
+            write_date(exec, dateaddr, date);
             0
         },
         glk_selector::TIME_TO_DATE_LOCAL => {
             let timeaddr = exec.call_args[0] as usize;
-            let timelen = exec.call_args[1] as usize;
-            let dateaddr = exec.call_args[2] as usize;
-            let datelen = exec.call_args[3] as usize;
-            let time = read_time(exec, timeaddr, timelen);
+            let dateaddr = exec.call_args[1] as usize;
+            let time = read_time(exec, timeaddr);
             let date = exec.glk.time_to_date_local(&time);
-            write_date(exec, dateaddr, datelen, date);
+            write_date(exec, dateaddr, date);
             0
         },
         glk_selector::SIMPLE_TIME_TO_DATE_UTC => {
             let time = exec.call_args[0] as i32;
             let factor = exec.call_args[1];
             let dateaddr = exec.call_args[2] as usize;
-            let datelen = exec.call_args[3] as usize;
             let date = exec.glk.simple_time_to_date_utc(time, factor);
-            write_date(exec, dateaddr, datelen, date);
+            write_date(exec, dateaddr, date);
             0
         },
         glk_selector::SIMPLE_TIME_TO_DATE_LOCAL => {
             let time = exec.call_args[0] as i32;
             let factor = exec.call_args[1];
             let dateaddr = exec.call_args[2] as usize;
-            let datelen = exec.call_args[3] as usize;
             let date = exec.glk.simple_time_to_date_local(time, factor);
-            write_date(exec, dateaddr, datelen, date);
+            write_date(exec, dateaddr, date);
             0
         },
         glk_selector::DATE_TO_TIME_UTC => {
             let dateaddr = exec.call_args[0] as usize;
-            let datelen = exec.call_args[1] as usize;
-            let timeaddr = exec.call_args[2] as usize;
-            let timelen = exec.call_args[3] as usize;
-            let date = read_date(exec, dateaddr, datelen);
+            let timeaddr = exec.call_args[1] as usize;
+            let date = read_date(exec, dateaddr);
             let time = exec.glk.date_to_time_utc(&date);
-            write_time(exec, timeaddr, timelen, time);
+            write_time(exec, timeaddr, time);
             0
         },
         glk_selector::DATE_TO_TIME_LOCAL => {
             let dateaddr = exec.call_args[0] as usize;
-            let datelen = exec.call_args[1] as usize;
-            let timeaddr = exec.call_args[2] as usize;
-            let timelen = exec.call_args[3] as usize;
-            let date = read_date(exec, dateaddr, datelen);
+            let timeaddr = exec.call_args[1] as usize;
+            let date = read_date(exec, dateaddr);
             let time = exec.glk.date_to_time_local(&date);
-            write_time(exec, timeaddr, timelen, time);
+            write_time(exec, timeaddr, time);
             0
         },
         glk_selector::DATE_TO_SIMPLE_TIME_UTC => {
             let dateaddr = exec.call_args[0] as usize;
-            let datelen = exec.call_args[1] as usize;
-            let factor = exec.call_args[2];
-            let date = read_date(exec, dateaddr, datelen);
+            let factor = exec.call_args[1];
+            let date = read_date(exec, dateaddr);
             exec.glk.date_to_simple_time_utc(&date, factor) as u32
         },
         glk_selector::DATE_TO_SIMPLE_TIME_LOCAL => {
             let dateaddr = exec.call_args[0] as usize;
-            let datelen = exec.call_args[1] as usize;
-            let factor = exec.call_args[2];
-            let date = read_date(exec, dateaddr, datelen);
+            let factor = exec.call_args[1];
+            let date = read_date(exec, dateaddr);
             exec.glk.date_to_simple_time_local(&date, factor) as u32
         },
         _ => 0,
@@ -1009,91 +990,75 @@ fn write_ref<G: Glk>(exec: &mut Execute<G>, addr: usize, val: u32) {
     }
 }
 
-fn write_event<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize, mut event: G::Event) {
-    let mut arr = exec.dispatch.get_buffer32(len);
-    if len > 0 {
-        arr[0] = event.evtype();
-    }
-    if len > 1 {
-        arr[1] = exec.dispatch.winids.get_index(event.win());
-    }
-    if len > 2 {
-        arr[2] = event.val1();
-    }
-    if len > 3 {
-        arr[3] = event.val2();
-    }
+fn write_stream_result<G: Glk>(exec: &mut Execute<G>, addr: usize, stream_result: (u32,u32,Option<(u32,Box<[u8]>)>,Option<(u32,Box<[u32]>)>)) {
+    let (readcount,writecount,buf,buf_uni) = stream_result;
+    let mut arr = exec.dispatch.get_buffer32(2);
+    arr[0] = readcount;
+    arr[1] = writecount;
     write_arrayref32(exec, addr, arr);
-    if let Some((addr,arr)) = event.buf() {
-        write_arrayref8(exec, addr as usize, arr);
+    if let Some((bufaddr,buf8)) = buf {
+        write_arrayref8(exec, bufaddr as usize, buf8);
     }
-    if let Some((addr,arr)) = event.buf_uni() {
-        write_arrayref32(exec, addr as usize, arr);
+    if let Some((bufaddr,buf32)) = buf_uni {
+        write_arrayref32(exec, bufaddr as usize, buf32);
     }
 }
 
-fn read_time<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> G::TimeVal {
-    let arr = read_arrayref32(exec, addr, len);
-    let high_sec = if len > 0 { arr[0] as i32 } else { 0 };
-    let low_sec = if len > 1 { arr[1] } else { 0 };
-    let microsec = if len > 2 { arr[2] as i32 } else { 0 };
+fn write_event<G: Glk>(exec: &mut Execute<G>, addr: usize, mut event: G::Event) {
+    let mut arr = exec.dispatch.get_buffer32(4);
+    arr[0] = event.evtype();
+    arr[1] = exec.dispatch.winids.get_index(event.win());
+    arr[2] = event.val1();
+    arr[3] = event.val2();
+    write_arrayref32(exec, addr, arr);
+    if let Some((bufaddr,buf)) = event.buf() {
+        write_arrayref8(exec, bufaddr as usize, buf);
+    }
+    if let Some((bufaddr,buf)) = event.buf_uni() {
+        write_arrayref32(exec, bufaddr as usize, buf);
+    }
+}
+
+fn read_time<G: Glk>(exec: &mut Execute<G>, addr: usize) -> G::TimeVal {
+    let arr = read_arrayref32(exec, addr, 3);
+    let high_sec = arr[0] as i32;
+    let low_sec = arr[1];
+    let microsec = arr[2] as i32;
     exec.dispatch.put_buffer32(arr);
     G::TimeVal::new(high_sec, low_sec, microsec)
 }
 
-fn write_time<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize, time: G::TimeVal) {
-    let mut arr = exec.dispatch.get_buffer32(len);
-    if len > 0 {
-        arr[0] = time.high_sec() as u32;
-    }
-    if len > 1 {
-        arr[1] = time.low_sec();
-    }
-    if len > 2 {
-        arr[2] = time.microsec() as u32;
-    }
+fn write_time<G: Glk>(exec: &mut Execute<G>, addr: usize, time: G::TimeVal) {
+    let mut arr = exec.dispatch.get_buffer32(3);
+    arr[0] = time.high_sec() as u32;
+    arr[1] = time.low_sec();
+    arr[2] = time.microsec() as u32;
     write_arrayref32(exec, addr, arr);
 }
 
-fn read_date<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> G::Date {
-    let arr = read_arrayref32(exec, addr, len);
-    let year = if len > 0 { arr[0] as i32 } else { 0 };
-    let month = if len > 1 { arr[1] as i32 } else { 0 };
-    let day = if len > 2 { arr[2] as i32 } else { 0 };
-    let weekday = if len > 3 { arr[3] as i32 } else { 0 };
-    let hour = if len > 4 { arr[4] as i32 } else { 0 };
-    let minute = if len > 5 { arr[5] as i32 } else { 0 };
-    let second = if len > 6 { arr[6] as i32 } else { 0 };
-    let microsec = if len > 7 { arr[7] as i32 } else { 0 };
+fn read_date<G: Glk>(exec: &mut Execute<G>, addr: usize) -> G::Date {
+    let arr = read_arrayref32(exec, addr, 8);
+    let year = arr[0] as i32;
+    let month = arr[1] as i32;
+    let day = arr[2] as i32;
+    let weekday = arr[3] as i32;
+    let hour = arr[4] as i32;
+    let minute = arr[5] as i32;
+    let second = arr[6] as i32;
+    let microsec = arr[7] as i32;
     exec.dispatch.put_buffer32(arr);
     G::Date::new(year, month, day, weekday, hour, minute, second, microsec)
 }
 
-fn write_date<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize, date: G::Date) {
-    let mut arr = exec.dispatch.get_buffer32(len);
-    if len > 0 {
-        arr[0] = date.year() as u32;
-    }
-    if len > 1 {
-        arr[1] = date.month() as u32;
-    }
-    if len > 2 {
-        arr[2] = date.day() as u32;
-    }
-    if len > 3 {
-        arr[3] = date.weekday() as u32;
-    }
-    if len > 4 {
-        arr[4] = date.hour() as u32;
-    }
-    if len > 5 {
-        arr[5] = date.minute() as u32;
-    }
-    if len > 6 {
-        arr[6] = date.second() as u32;
-    }
-    if len > 7 {
-        arr[7] = date.microsec() as u32;
-    }
+fn write_date<G: Glk>(exec: &mut Execute<G>, addr: usize, date: G::Date) {
+    let mut arr = exec.dispatch.get_buffer32(8);
+    arr[0] = date.year() as u32;
+    arr[1] = date.month() as u32;
+    arr[2] = date.day() as u32;
+    arr[3] = date.weekday() as u32;
+    arr[4] = date.hour() as u32;
+    arr[5] = date.minute() as u32;
+    arr[6] = date.second() as u32;
+    arr[7] = date.microsec() as u32;
     write_arrayref32(exec, addr, arr);
 }

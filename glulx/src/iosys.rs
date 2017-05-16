@@ -68,6 +68,7 @@ pub fn streamchar<G: Glk>(exec: &mut Execute<G>, val: u8, within_string: bool) {
         Mode::Filter => {
             if !within_string {
                 call::push_stub(&mut exec.state, call::DISCARD, 0);
+                exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.call_args.clear();
             exec.call_args.push(val as u32);
@@ -93,6 +94,7 @@ pub fn streamunichar<G: Glk>(exec: &mut Execute<G>, val: u32, within_string: boo
         Mode::Filter => {
             if !within_string {
                 call::push_stub(&mut exec.state, call::DISCARD, 0);
+                exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.call_args.clear();
             exec.call_args.push(val);
@@ -118,17 +120,19 @@ pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) {
         Mode::Filter => {
             if !within_string {
                 call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+                exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.state.pc = val as usize;
             call::push_stub(&mut exec.state, call::RESUME_NUM, 0);
+            exec.state.frame_ptr = exec.state.stack.len();
             call::ret(exec, 0);
         },
         Mode::Glk => {
             let n = if val < 0 {
                 exec.glk.put_char(b'-');
-                -val
+                -val as i64
             } else {
-                val
+                val as i64
             };
             let mut pow10 = 1;
             loop {
@@ -171,9 +175,11 @@ fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) {
         Mode::Filter => {
             if !within_string {
                 call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+                exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.state.pc = addr;
             call::push_stub(&mut exec.state, call::RESUME_E0, 0);
+            exec.state.frame_ptr = exec.state.stack.len();
             call::ret(exec, 0);
         },
         Mode::Glk => {
@@ -188,9 +194,11 @@ fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) {
 fn stream_e1<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) {
     if !within_string {
         call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+        exec.state.frame_ptr = exec.state.stack.len();
     }
     exec.state.pc = addr;
     call::push_stub(&mut exec.state, call::RESUME_E1, 0);
+    exec.state.frame_ptr = exec.state.stack.len();
     call::ret(exec, 0);
 }
 
@@ -204,9 +212,11 @@ fn stream_e2<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) {
         Mode::Filter => {
             if !within_string {
                 call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+                exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.state.pc = addr;
             call::push_stub(&mut exec.state, call::RESUME_E2, 0);
+            exec.state.frame_ptr = exec.state.stack.len();
             call::ret(exec, 0);
         },
         Mode::Glk => {
@@ -272,22 +282,26 @@ pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) {
             2 => {
                 let val = exec.state.mem[ptr+1];
                 call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.state.frame_ptr = exec.state.stack.len();
                 streamchar(exec, val, true);
                 break;
             },
             3 => {
                 call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.state.frame_ptr = exec.state.stack.len();
                 stream_e0(exec, ptr+1, true);
                 break;
             },
             4 => {
                 let val = read_u32(&exec.state.mem, ptr+1);
                 call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.state.frame_ptr = exec.state.stack.len();
                 streamunichar(exec, val, true);
                 break;
             },
             5 => {
                 call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                exec.state.frame_ptr = exec.state.stack.len();
                 stream_e2(exec, ptr+1, true);
                 break;
             },
@@ -308,6 +322,7 @@ pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) {
             t => panic!("{:x}: invalid stringtbl node type {:x}", ptr, t),
         };
         call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+        exec.state.frame_ptr = exec.state.stack.len();
         match exec.state.mem[addr] {
             call::FUNC_C0 | call::FUNC_C1 => {
                 exec.call_args.clear();

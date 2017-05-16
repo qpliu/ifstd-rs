@@ -103,13 +103,15 @@ impl Glk for GlkTerm {
         WinId{ ptr }
     }
 
-    fn window_close(&mut self, win: &mut Self::WinId) -> (u32,u32) {
+    fn window_close(&mut self, win: &mut Self::WinId) -> (u32,u32,Option<(u32,Box<[u8]>)>,Option<(u32,Box<[u32]>)>) {
         let mut result = Default::default();
         unsafe {
             c_interface::glk_window_close(win.ptr, &mut result);
         }
         win.ptr = std::ptr::null();
-        (result.readcount,result.writecount)
+        (result.readcount,result.writecount,
+         array_registry::retrieve_stream_memory(),
+         array_registry::retrieve_stream_memory_uni())
     }
 
     fn window_get_size(&mut self, win: &Self::WinId) -> (u32,u32) {
