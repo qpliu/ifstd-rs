@@ -127,7 +127,7 @@ pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) -
             exec.state.pc = val as usize;
             call::push_stub(&mut exec.state, call::RESUME_NUM, 0);
             exec.state.frame_ptr = exec.state.stack.len();
-            call::ret(exec, 0);
+            return Next::Ret(0);
         },
         Mode::Glk => {
             let n = if val < 0 {
@@ -183,7 +183,7 @@ fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
             exec.state.pc = addr;
             call::push_stub(&mut exec.state, call::RESUME_E0, 0);
             exec.state.frame_ptr = exec.state.stack.len();
-            call::ret(exec, 0);
+            return Next::Ret(0);
         },
         Mode::Glk => {
             exec.glk.put_string(cstr(&exec.state.mem, addr));
@@ -229,13 +229,12 @@ fn stream_e2<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
             let mut i = addr;
             loop {
                 let val = read_u32(&exec.state.mem, i);
-                exec.iosys.tmp.push(val);
                 if val == 0 {
                     exec.glk.put_string_uni(&exec.iosys.tmp);
                     break;
                 }
+                exec.iosys.tmp.push(val);
                 if exec.iosys.tmp.len() >= MAX_BUFFER_SIZE {
-                    exec.iosys.tmp.push(val);
                     exec.glk.put_string_uni(&exec.iosys.tmp);
                     exec.iosys.tmp.clear();
                 }
@@ -327,7 +326,7 @@ pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) -> Next {
             call::FUNC_C0 | call::FUNC_C1 => {
                 exec.call_args.clear();
                 for i in 0 .. argc {
-                    let val = read_u32(&exec.state.mem, ptr+5+4*i);
+                    let val = read_u32(&exec.state.mem, ptr+9+4*i);
                     exec.call_args.push(val);
                 }
                 return call::tailcall(exec, addr);
