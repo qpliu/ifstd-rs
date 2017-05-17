@@ -29,7 +29,7 @@ pub const LOCAL_32: u8 = 4;
 pub fn call<G: Glk>(exec: &mut Execute<G>, addr: usize, dest_type: u32, dest_addr: u32) {
     match accel::call(exec, addr) {
         Some(val) => {
-            ret_result(exec, val, dest_type, dest_addr as usize);
+            store_ret_result(exec, val, dest_type, dest_addr as usize);
         },
         None => {
             push_stub(&mut exec.state, dest_type, dest_addr);
@@ -183,11 +183,11 @@ pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> bool {
         RESUME_E0 | RESUME_E1 | RESUME_E2 | RESUME_NUM => (),
         _ => panic!("unknown DestType {:x}", dest_type),
     }
-    ret_result(exec, val, dest_type, dest_addr);
+    store_ret_result(exec, val, dest_type, dest_addr);
     true
 }
 
-fn ret_result<G: Glk>(exec: &mut Execute<G>, val: u32, dest_type: u32, dest_addr: usize) {
+pub fn store_ret_result<G: Glk>(exec: &mut Execute<G>, val: u32, dest_type: u32, dest_addr: usize) {
     match dest_type {
         DISCARD => (),
         MEM => write_u32(&mut exec.state.mem, dest_addr, val),

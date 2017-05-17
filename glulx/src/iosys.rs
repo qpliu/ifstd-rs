@@ -130,7 +130,7 @@ pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) {
         Mode::Glk => {
             let n = if val < 0 {
                 exec.glk.put_char(b'-');
-                -val as i64
+                -(val as i64)
             } else {
                 val as i64
             };

@@ -263,18 +263,18 @@ impl<G: Glk> Execute<G> {
                 self.tick();
             },
             opcode::CATCH => {
-                let (s1,l1) = self.s1l1();
-                let (dest_type,dest_addr) = s1.result_dest(self);
+                let ((dest_type,dest_addr),l1) = self.s1l1();
                 call::push_stub(&mut self.state, dest_type, dest_addr);
-                let catch_token = self.state.stack.len() as u32;
-                s1.store(self, catch_token);
+                let catch_token = 4 * self.state.stack.len() as u32;
+                call::store_ret_result(self, catch_token, dest_type, dest_addr as usize);
                 if !self.jump(l1) {
                     return false;
                 }
             },
             opcode::THROW => {
                 let (l1,l2) = self.l1l2();
-                self.state.stack.truncate(l2 as usize);
+                self.state.stack.truncate((l2 / 4) as usize);
+                self.state.frame_ptr = self.state.stack.len();
                 let return_status = call::ret(self, l1);
                 assert!(return_status, "{:x}:throw {:x} {:x}", self.state.pc, l1, l2);
                 self.tick();
@@ -286,6 +286,7 @@ impl<G: Glk> Execute<G> {
                 for _ in 0 .. l2 {
                     self.call_args.push(self.state.stack.pop().unwrap());
                 }
+                self.state.stack.truncate(self.state.frame_ptr);
                 if !call::tailcall(self, addr) {
                     return false;
                 }
@@ -340,13 +341,15 @@ impl<G: Glk> Execute<G> {
             },
             opcode::ALOADBIT => {
                 let (l1,l2,s1) = self.l1l2s1();
-                let addr = l1.wrapping_add(l2/8);
+                let byteoffset = (l2 as i32 >> 3) as u32;
+                let bitoffset = (l2 & 7) as u8;
+                let addr = l1.wrapping_add(byteoffset);
                 let val = self.state.mem[addr as usize];
-                s1.store(self, if val & (1 << (l2 % 8) as u8) == 0 { 0 } else { 1 });
+                s1.store(self, if val & (1 << bitoffset) == 0 { 0 } else { 1 });
             },
             opcode::ASTORE => {
                 let (l1,l2,l3) = self.l1l2l3();
-                let addr = l1.wrapping_add(l2.wrapping_mul(4));
+                let addr = l1.wrapping_add((l2 as i32).wrapping_mul(4) as u32);
                 write_u32(&mut self.state.mem, addr as usize, l3);
             },
             opcode::ASTORES => {
@@ -360,11 +363,13 @@ impl<G: Glk> Execute<G> {
             },
             opcode::ASTOREBIT => {
                 let (l1,l2,l3) = self.l1l2l3();
-                let addr = l1.wrapping_add(l2/8);
+                let byteoffset = (l2 as i32 >> 3) as u32;
+                let bitoffset = (l2 & 7) as u8;
+                let addr = l1.wrapping_add(byteoffset);
                 if l3 == 0 {
-                    self.state.mem[addr as usize] &= !(1 << (l2 % 8) as u8);
+                    self.state.mem[addr as usize] &= !(1 << bitoffset as u8);
                 } else {
-                    self.state.mem[addr as usize] |= 1 << (l2 % 8) as u8;
+                    self.state.mem[addr as usize] |= 1 << bitoffset as u8;
                 }
             },
             opcode::STKCOUNT => {
@@ -381,16 +386,19 @@ impl<G: Glk> Execute<G> {
             opcode::STKSWAP => {
                 assert!(self.frame_end + 2 <= self.state.stack.len(), "{:x}:stkswap underflow", self.state.pc);
                 let index = self.state.stack.len()-1;
-                self.state.stack.swap(index-1,index-2);
+                self.state.stack.swap(index,index-1);
             },
             opcode::STKROLL => {
                 let (l1,l2) = self.l1l2();
                 let len = self.state.stack.len();
                 assert!(self.frame_end + l1 as usize <= len, "{:x}:stkroll {:x} underflow {:x}", self.state.pc, l1, l2);
-                let count = (l1 as i32 - l2 as i32 % l1 as i32) % l1 as i32;
-                for _ in 0 .. count {
-                    let val = self.state.stack.remove(len - l1 as usize);
-                    self.state.stack.push(val);
+                if l1 > 0 {
+                    let count = (l1 as i32 - l2 as i32 % l1 as i32) % l1 as i32;
+                    for _ in 0 .. count {
+                        let val = self.state.stack.remove(len - l1 as usize);
+                        self.state.stack.push(val);
+
+                    }
                 }
             },
             opcode::STKCOPY => {
@@ -918,10 +926,11 @@ impl<G: Glk> Execute<G> {
         m1
     }
 
-    fn s1l1(&mut self) -> (operand::Mode,u32) {
+    fn s1l1(&mut self) -> ((u32,u32),u32) {
         let (m1,m2) = operand::next_mode(&mut self.state);
-        let l2 = m2.load(self);
-        (m1,l2)
+        let result_dest = m1.result_dest(self);
+        let l1 = m2.load(self);
+        (result_dest,l1)
     }
 
     fn s1s2(&mut self) -> (operand::Mode,operand::Mode) {
