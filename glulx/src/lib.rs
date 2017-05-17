@@ -27,7 +27,9 @@ pub fn run<G: Glk, R: std::io::Read>(mut glk: G, r: &mut R, resources: Option<G:
         Err(cause) => (glk,Err(cause)),
         Ok(state) => {
             let mut exec = execute::Execute::new(state, glk);
-            while exec.next() {
+            let mut next = execute::Next::Exec;
+            while next != execute::Next::Quit {
+                next = exec.next(next);
             }
             (exec.glk,Ok(()))
         },

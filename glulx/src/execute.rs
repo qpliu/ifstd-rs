@@ -4,6 +4,13 @@ use glk::Glk;
 use super::{accel,call,gestalt,glk_dispatch,iosys,malloc,opcode,operand,search,state};
 use super::state::{read_u16,read_u32,write_u16,write_u32,State};
 
+#[derive(Eq,PartialEq)]
+pub enum Next {
+    Quit,
+    Exec,
+    Ret(u32),
+}
+
 pub struct Execute<G: Glk> {
     pub state: State,
 
@@ -52,7 +59,15 @@ impl<G: Glk> Execute<G> {
         exec
     }
 
-    pub fn next(&mut self) -> bool {
+    pub fn next(&mut self, next: Next) -> Next {
+        match next {
+            Next::Quit => Next::Quit,
+            Next::Exec => self.exec_next(),
+            Next::Ret(val) => call::ret(self, val),
+        }
+    }
+
+    fn exec_next(&mut self) -> Next {
         let opcode_addr = self.state.pc;
         let mut opcode = self.state.mem[self.state.pc] as u32;
         match opcode & 0xc0 {
@@ -144,104 +159,78 @@ impl<G: Glk> Execute<G> {
             },
             opcode::JUMP => {
                 let l1 = self.l1();
-                if !self.jump(l1) {
-                    return false;
-                }
+                return self.jump(l1);
             },
             opcode::JZ => {
                 let (l1,l2) = self.l1l2();
                 if l1 == 0 {
-                    if !self.jump(l2) {
-                        return false;
-                    }
+                    return self.jump(l2);
                 }
             },
             opcode::JNZ => {
                 let (l1,l2) = self.l1l2();
                 if l1 != 0 {
-                    if !self.jump(l2) {
-                        return false;
-                    }
+                    return self.jump(l2);
                 }
             },
             opcode::JEQ => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 == l2 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JNE => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 != l2 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JLT => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if (l1 as i32) < l2 as i32 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JGE => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 as i32 >= l2 as i32 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JGT => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 as i32 > l2 as i32 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JLE => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 as i32 <= l2 as i32 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JLTU => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 < l2 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JGEU => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 >= l2 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JGTU => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 > l2 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JLEU => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if l1 <= l2 {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::CALL => {
@@ -257,27 +246,22 @@ impl<G: Glk> Execute<G> {
             },
             opcode::RETURN => {
                 let l1 = self.l1();
-                if !call::ret(self, l1) {
-                    return false;
-                }
                 self.tick();
+                return call::ret(self, l1);
             },
             opcode::CATCH => {
                 let ((dest_type,dest_addr),l1) = self.s1l1();
                 call::push_stub(&mut self.state, dest_type, dest_addr);
                 let catch_token = 4 * self.state.stack.len() as u32;
                 call::store_ret_result(self, catch_token, dest_type, dest_addr as usize);
-                if !self.jump(l1) {
-                    return false;
-                }
+                return self.jump(l1);
             },
             opcode::THROW => {
                 let (l1,l2) = self.l1l2();
                 self.state.stack.truncate((l2 / 4) as usize);
                 self.state.frame_ptr = self.state.stack.len();
-                let return_status = call::ret(self, l1);
-                assert!(return_status, "{:x}:throw {:x} {:x}", self.state.pc, l1, l2);
                 self.tick();
+                return Next::Ret(l1);
             },
             opcode::TAILCALL => {
                 let (l1,l2) = self.l1l2();
@@ -287,10 +271,8 @@ impl<G: Glk> Execute<G> {
                     self.call_args.push(self.state.stack.pop().unwrap());
                 }
                 self.state.stack.truncate(self.state.frame_ptr);
-                if !call::tailcall(self, addr) {
-                    return false;
-                }
                 self.tick();
+                return call::tailcall(self, addr);
             },
             opcode::COPY => {
                 let (l1,s1) = self.l1s1();
@@ -412,19 +394,19 @@ impl<G: Glk> Execute<G> {
             },
             opcode::STREAMCHAR => {
                 let l1 = self.l1();
-                iosys::streamchar(self, l1 as u8, false);
+                return iosys::streamchar(self, l1 as u8, false);
             },
             opcode::STREAMNUM => {
                 let l1 = self.l1();
-                iosys::streamnum(self, l1 as i32, false);
+                return iosys::streamnum(self, l1 as i32, false);
             },
             opcode::STREAMSTR => {
                 let l1 = self.l1();
-                iosys::streamstr(self, l1 as usize, false);
+                return iosys::streamstr(self, l1 as usize, false);
             },
             opcode::STREAMUNICHAR => {
                 let l1 = self.l1();
-                iosys::streamunichar(self, l1, false);
+                return iosys::streamunichar(self, l1, false);
             },
             opcode::GESTALT => {
                 let (l1,l2,s1) = self.l1l2s1();
@@ -452,6 +434,7 @@ impl<G: Glk> Execute<G> {
             },
             opcode::JUMPABS => {
                 let l1 = self.l1();
+                self.tick();
                 self.state.pc = l1 as usize;
             },
             opcode::RANDOM => {
@@ -472,7 +455,7 @@ impl<G: Glk> Execute<G> {
                 self.rng.reseed(if l1 == 0 { rand::random() } else { [l1; 4] });
             },
             opcode::QUIT => {
-                return false;
+                return Next::Quit;
             },
             opcode::VERIFY => {
                 let s1 = self.s1();
@@ -495,9 +478,7 @@ impl<G: Glk> Execute<G> {
                 let (l1,s1) = self.l1s1();
                 match iosys::restore(self, l1) {
                     Ok(()) => {
-                        if !call::ret(self, 0xffffffff) {
-                            return false;
-                        }
+                        return Next::Ret(0xffffffff);
                     },
                     _ => s1.store(self, 1),
                 }
@@ -745,72 +726,56 @@ impl<G: Glk> Execute<G> {
             opcode::JFEQ => {
                 let (l1,l2,l3,l4) = self.l1l2l3l4();
                 if (to_f32(l1) - to_f32(l2)).abs() <= to_f32(l3).abs() {
-                    if !self.jump(l4) {
-                        return false;
-                    }
+                    return self.jump(l4);
                 }
             },
             opcode::JFNE => {
                 let (l1,l2,l3,l4) = self.l1l2l3l4();
                 if !((to_f32(l1) - to_f32(l2)).abs() <= to_f32(l3).abs()) {
-                    if !self.jump(l4) {
-                        return false;
-                    }
+                    return self.jump(l4);
                 }
             },
             opcode::JFLT => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if to_f32(l1) < to_f32(l2) {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JFLE => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if to_f32(l1) <= to_f32(l2) {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JFGT => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if to_f32(l1) > to_f32(l2) {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JFGE => {
                 let (l1,l2,l3) = self.l1l2l3();
                 if to_f32(l1) >= to_f32(l2) {
-                    if !self.jump(l3) {
-                        return false;
-                    }
+                    return self.jump(l3);
                 }
             },
             opcode::JISNAN => {
                 let (l1,l2) = self.l1l2();
                 if to_f32(l1).is_nan() {
-                    if !self.jump(l2) {
-                        return false;
-                    }
+                    return self.jump(l2);
                 }
             },
             opcode::JISINF => {
                 let (l1,l2) = self.l1l2();
                 if to_f32(l1).is_infinite() {
-                    if !self.jump(l2) {
-                        return false;
-                    }
+                    return self.jump(l2);
                 }
             },
             _ => {
                 panic!("{:x}: unknown opcode {:x}", opcode_addr, opcode);
             },
         }
-        true
+        Next::Exec
     }
 
     fn start(&mut self) {
@@ -937,15 +902,15 @@ impl<G: Glk> Execute<G> {
         operand::next_mode(&mut self.state)
     }
 
-    fn jump(&mut self, offset: u32) -> bool {
+    fn jump(&mut self, offset: u32) -> Next {
         self.tick();
         match offset {
-            0 => call::ret(self, 0),
-            1 => call::ret(self, 1),
+            0 => Next::Ret(0),
+            1 => Next::Ret(1),
             _ => {
                 let pc = self.state.pc as i32 + offset as i32 - 2;
                 self.state.pc = pc as usize & 0xffffffff;
-                true
+                Next::Exec
             }
         }
     }

@@ -2,7 +2,7 @@ use glk::Glk;
 
 use super::{accel,iosys};
 use super::state::{read_u32,write_u32,State};
-use super::execute::Execute;
+use super::execute::{Execute,Next};
 
 pub const DISCARD: u32 = 0;
 pub const MEM: u32 = 1;
@@ -38,14 +38,14 @@ pub fn call<G: Glk>(exec: &mut Execute<G>, addr: usize, dest_type: u32, dest_add
     }
 }
 
-pub fn tailcall<G: Glk>(exec: &mut Execute<G>, addr: usize) -> bool {
+pub fn tailcall<G: Glk>(exec: &mut Execute<G>, addr: usize) -> Next {
     match accel::call(exec, addr) {
         Some(val) => {
-            ret(exec, val)
+            Next::Ret(val)
         },
         None => {
             call_func(exec, addr);
-            true
+            Next::Exec
         },
     }
 }
@@ -162,13 +162,13 @@ pub fn call_func<G: Glk>(exec: &mut Execute<G>, addr: usize) {
     }
 }
 
-pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> bool {
+pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> Next {
     {
         let frame_ptr = exec.state.frame_ptr;
         exec.state.stack.truncate(frame_ptr);
     }
     match exec.state.stack.pop() {
-        None => return false,
+        None => return Next::Quit,
         Some(frame_ptr) => exec.state.frame_ptr = frame_ptr as usize,
     }
     exec.state.pc = exec.state.stack.pop().unwrap() as usize;
@@ -183,21 +183,21 @@ pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> bool {
         RESUME_E0 | RESUME_E1 | RESUME_E2 | RESUME_NUM => (),
         _ => panic!("unknown DestType {:x}", dest_type),
     }
-    store_ret_result(exec, val, dest_type, dest_addr);
-    true
+    store_ret_result(exec, val, dest_type, dest_addr)
 }
 
-pub fn store_ret_result<G: Glk>(exec: &mut Execute<G>, val: u32, dest_type: u32, dest_addr: usize) {
+pub fn store_ret_result<G: Glk>(exec: &mut Execute<G>, val: u32, dest_type: u32, dest_addr: usize) -> Next {
     match dest_type {
         DISCARD => (),
         MEM => write_u32(&mut exec.state.mem, dest_addr, val),
         LOCAL => exec.state.stack[exec.frame_locals + dest_addr/4] = val,
         STACK => exec.state.stack.push(val),
-        RESUME_E1 => iosys::resume_e1(exec, dest_addr as u8),
+        RESUME_E1 => return iosys::resume_e1(exec, dest_addr as u8),
         RESUME_CODE => (),
-        RESUME_NUM => iosys::resume_num(exec, dest_addr),
-        RESUME_E0 => iosys::resume_e0(exec),
-        RESUME_E2 => iosys::resume_e2(exec),
+        RESUME_NUM => return iosys::resume_num(exec, dest_addr),
+        RESUME_E0 => return iosys::resume_e0(exec),
+        RESUME_E2 => return iosys::resume_e2(exec),
         _ => panic!("unknown DestType {:x}", dest_type),
     }
+    Next::Exec
 }
