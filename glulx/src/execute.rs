@@ -1,4 +1,5 @@
 use rand;
+use std::cmp::min;
 use glk::Glk;
 
 use super::{accel,call,gestalt,glk_dispatch,iosys,malloc,opcode,operand,search,state};
@@ -450,7 +451,7 @@ impl<G: Glk> Execute<G> {
                 } else if l1 as i32 > 0 {
                     self.rng.gen_range(0, l1)
                 } else {
-                    self.rng.gen_range(l1 - 1, 0xffffffff) + 1
+                    self.rng.gen_range(l1-1, 0xffffffff).wrapping_add(2)
                 };
                 s1.store(self, val);
             },
@@ -516,6 +517,8 @@ impl<G: Glk> Execute<G> {
                 for i in 0 .. len {
                     if let Some(s1) = self.undo_state[len - i - 1].restore(&mut self.state) {
                         self.unstash_protected_range();
+                        self.frame_locals = self.state.frame_ptr + self.state.stack[self.state.frame_ptr] as usize / 4;
+                        self.frame_end = self.state.frame_ptr + self.state.stack[self.state.frame_ptr+1] as usize / 4;
                         s1.store(self, 0xffffffff);
                         failed = false;
                         break;
@@ -654,23 +657,23 @@ impl<G: Glk> Execute<G> {
             opcode::FTONUMZ => {
                 let (l1,s1) = self.l1s1();
                 let f = to_f32(l1);
-                s1.store(self, if f.is_finite() {
+                s1.store(self, if f.is_finite() && f > i32::min_value() as f32 && f < i32::max_value() as f32 {
                         f.trunc() as i32 as u32
-                    } else if l1 >= 0x8000000 {
-                        0x80000000
-                    } else {
+                    } else if l1 & 0x80000000 == 0 {
                         0x7fffffff
+                    } else {
+                        0x80000000
                     });
             },
             opcode::FTONUMN => {
                 let (l1,s1) = self.l1s1();
                 let f = to_f32(l1);
-                s1.store(self, if f.is_finite() {
+                s1.store(self, if f.is_finite() && f > i32::min_value() as f32 && f < i32::max_value() as f32 {
                         f.round() as i32 as u32
-                    } else if l1 >= 0x8000000 {
-                        0x80000000
-                    } else {
+                    } else if l1 & 0x80000000 == 0 {
                         0x7fffffff
+                    } else {
+                        0x80000000
                     });
             },
             opcode::CEIL => {
@@ -751,13 +754,38 @@ impl<G: Glk> Execute<G> {
             },
             opcode::JFEQ => {
                 let (l1,l2,l3,l4) = self.l1l2l3l4();
-                if (to_f32(l1) - to_f32(l2)).abs() <= to_f32(l3).abs() {
+                let f1 = to_f32(l1);
+                let f2 = to_f32(l2);
+                let f3 = to_f32(l3);
+                if f1.is_nan() || f2.is_nan() || f3.is_nan() {
+                } else if f3.is_infinite() {
+                    if !f1.is_infinite() || !f2.is_infinite() || f1.signum() == f2.signum() {
+                        return self.jump(l4);
+                    }
+                } else if f1.is_infinite() && f2.is_infinite() {
+                    if f1.signum() == f2.signum() {
+                        return self.jump(l4);
+                    }
+                } else if (f1 - f2).abs() <= f3.abs() {
                     return self.jump(l4);
                 }
             },
             opcode::JFNE => {
                 let (l1,l2,l3,l4) = self.l1l2l3l4();
-                if !((to_f32(l1) - to_f32(l2)).abs() <= to_f32(l3).abs()) {
+                let f1 = to_f32(l1);
+                let f2 = to_f32(l2);
+                let f3 = to_f32(l3);
+                if f1.is_nan() || f2.is_nan() || f3.is_nan() {
+                    return self.jump(l4);
+                } else if f3.is_infinite() {
+                    if f1.is_infinite() && f2.is_infinite() && f1.signum() != f2.signum() {
+                        return self.jump(l4);
+                    }
+                } else if f1.is_infinite() && f2.is_infinite() {
+                    if f1.signum() != f2.signum() {
+                        return self.jump(l4);
+                    }
+                } else if (f1 - f2).abs() > f3.abs() {
                     return self.jump(l4);
                 }
             },
@@ -1007,14 +1035,25 @@ impl<G: Glk> Execute<G> {
 
     fn stash_protected_range(&mut self) {
         let (start, len) = self.protected_range;
+
         self.protected_tmp.clear();
-        self.protected_tmp.extend_from_slice(&self.state.mem[start .. start+len]);
+        if start >= self.state.mem.len() {
+            self.protected_tmp.resize(len, 0);
+            return;
+        }
+        let end = min(start+len, self.state.mem.len());
+        self.protected_tmp.extend_from_slice(&self.state.mem[start .. end]);
+        self.protected_tmp.resize(len, 0);
     }
 
     fn unstash_protected_range(&mut self) {
         let (start, len) = self.protected_range;
-        for i in 0 .. len {
-            self.state.mem[start + i] = self.protected_tmp[i];
+        if start >= self.state.mem.len() {
+            return;
+        }
+        let safe_len = min(len, min(self.protected_tmp.len(), self.state.mem.len() - start));
+        for i in 0 .. safe_len {
+            self.state.mem[start+i] = self.protected_tmp[i];
         }
     }
 

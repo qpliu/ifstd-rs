@@ -18,8 +18,8 @@ fn zero_key(mem: &[u8], key_size: usize, ikey: usize) -> bool {
 fn cmp_key(state: &State, indirect: bool, key_size: usize, ikey: usize, key: u32) -> Ordering {
     if !indirect {
         match key_size {
-            1 => (state.mem[ikey] as u32).cmp(&key),
-            2 => read_u16(&state.mem, ikey).cmp(&key),
+            1 => (state.mem[ikey] as u32).cmp(&(key & 0xff)),
+            2 => read_u16(&state.mem, ikey).cmp(&(key & 0xffff)),
             4 => read_u32(&state.mem, ikey).cmp(&key),
             _ => panic!("{:x}: invalid search key size {}", state.pc, key_size),
         }
