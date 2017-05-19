@@ -3,9 +3,6 @@ name = "glulx-rs"
 version = "0.1.0"
 description = "Glulx interpreter"
 
-[features]
-debug_trace = []
-
 [dependencies]
 iff-rs = { git = "https://github.com/qpliu/iff-rs" }
 rand = "0.3"

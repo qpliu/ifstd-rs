@@ -1,7 +1,7 @@
 use std::io::{Error,ErrorKind,Result};
 use glk::{Glk,IdType};
 
-use super::{call,save};
+use super::{call,save,trace};
 use super::state::{cstr,read_u32};
 use super::execute::{Execute,Next};
 
@@ -59,6 +59,7 @@ pub fn supported(mode: u32) -> bool {
 }
 
 pub fn streamchar<G: Glk>(exec: &mut Execute<G>, val: u8, within_string: bool) -> Next {
+    trace::iosys(exec, "streamchar");
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -67,7 +68,7 @@ pub fn streamchar<G: Glk>(exec: &mut Execute<G>, val: u8, within_string: bool) -
         },
         Mode::Filter => {
             if !within_string {
-                call::push_stub(&mut exec.state, call::DISCARD, 0);
+                call::push_stub(exec, call::DISCARD, 0);
                 exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.call_args.clear();
@@ -86,6 +87,7 @@ pub fn streamchar<G: Glk>(exec: &mut Execute<G>, val: u8, within_string: bool) -
 }
 
 pub fn streamunichar<G: Glk>(exec: &mut Execute<G>, val: u32, within_string: bool) -> Next {
+    trace::iosys(exec, "streamunichar");
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -94,7 +96,7 @@ pub fn streamunichar<G: Glk>(exec: &mut Execute<G>, val: u32, within_string: boo
         },
         Mode::Filter => {
             if !within_string {
-                call::push_stub(&mut exec.state, call::DISCARD, 0);
+                call::push_stub(exec, call::DISCARD, 0);
                 exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.call_args.clear();
@@ -113,6 +115,7 @@ pub fn streamunichar<G: Glk>(exec: &mut Execute<G>, val: u32, within_string: boo
 }
 
 pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) -> Next {
+    trace::iosys(exec, "streamnum");
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -121,11 +124,11 @@ pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) -
         },
         Mode::Filter => {
             if !within_string {
-                call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+                call::push_stub(exec, call::RESUME_CODE, 0);
                 exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.state.pc = val as usize;
-            call::push_stub(&mut exec.state, call::RESUME_NUM, 0);
+            call::push_stub(exec, call::RESUME_NUM, 0);
             exec.state.frame_ptr = exec.state.stack.len();
             return Next::Ret(0);
         },
@@ -157,6 +160,7 @@ pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) -
 }
 
 pub fn streamstr<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+    trace::iosys(exec, "streamstr");
     match exec.state.mem[addr] {
         call::STRING_E0 => stream_e0(exec, addr+1, within_string),
         call::STRING_E1 => stream_e1(exec, addr+1, within_string),
@@ -169,6 +173,7 @@ pub fn streamstr<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool
 }
 
 fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+    trace::iosys(exec, "stream_e0");
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -177,11 +182,11 @@ fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
         },
         Mode::Filter => {
             if !within_string {
-                call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+                call::push_stub(exec, call::RESUME_CODE, 0);
                 exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.state.pc = addr;
-            call::push_stub(&mut exec.state, call::RESUME_E0, 0);
+            call::push_stub(exec, call::RESUME_E0, 0);
             exec.state.frame_ptr = exec.state.stack.len();
             return Next::Ret(0);
         },
@@ -196,17 +201,19 @@ fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
 }
 
 fn stream_e1<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+    trace::iosys(exec, "stream_e1");
     if !within_string {
-        call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+        call::push_stub(exec, call::RESUME_CODE, 0);
         exec.state.frame_ptr = exec.state.stack.len();
     }
     exec.state.pc = addr;
-    call::push_stub(&mut exec.state, call::RESUME_E1, 0);
+    call::push_stub(exec, call::RESUME_E1, 0);
     exec.state.frame_ptr = exec.state.stack.len();
     Next::Ret(0)
 }
 
 fn stream_e2<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+    trace::iosys(exec, "stream_e2");
     match exec.iosys.mode {
         Mode::Null => {
             if within_string {
@@ -215,11 +222,11 @@ fn stream_e2<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
         },
         Mode::Filter => {
             if !within_string {
-                call::push_stub(&mut exec.state, call::RESUME_CODE, 0);
+                call::push_stub(exec, call::RESUME_CODE, 0);
                 exec.state.frame_ptr = exec.state.stack.len();
             }
             exec.state.pc = addr;
-            call::push_stub(&mut exec.state, call::RESUME_E2, 0);
+            call::push_stub(exec, call::RESUME_E2, 0);
             exec.state.frame_ptr = exec.state.stack.len();
             return Next::Ret(0);
         },
@@ -249,6 +256,7 @@ fn stream_e2<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
 }
 
 pub fn resume_e0<G: Glk>(exec: &mut Execute<G>) -> Next {
+    trace::iosys(exec, "resume_e0");
     let val = exec.state.mem[exec.state.pc] as u32;
     if val == 0 {
         return Next::Ret(0);
@@ -262,6 +270,7 @@ pub fn resume_e0<G: Glk>(exec: &mut Execute<G>) -> Next {
 }
 
 pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) -> Next {
+    trace::iosys(exec, "resume_e1");
     let mut ptr = exec.stringtbl;
     ptr = read_u32(&exec.state.mem, ptr+8) as usize;
 
@@ -284,23 +293,23 @@ pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) -> Next {
             },
             2 => {
                 let val = exec.state.mem[ptr+1];
-                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                call::push_stub(exec, call::RESUME_E1, bi as u32);
                 exec.state.frame_ptr = exec.state.stack.len();
                 return streamchar(exec, val, true);
             },
             3 => {
-                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                call::push_stub(exec, call::RESUME_E1, bi as u32);
                 exec.state.frame_ptr = exec.state.stack.len();
                 return stream_e0(exec, ptr+1, true);
             },
             4 => {
                 let val = read_u32(&exec.state.mem, ptr+1);
-                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                call::push_stub(exec, call::RESUME_E1, bi as u32);
                 exec.state.frame_ptr = exec.state.stack.len();
                 return streamunichar(exec, val, true);
             },
             5 => {
-                call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+                call::push_stub(exec, call::RESUME_E1, bi as u32);
                 exec.state.frame_ptr = exec.state.stack.len();
                 return stream_e2(exec, ptr+1, true);
             },
@@ -320,7 +329,7 @@ pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) -> Next {
             },
             t => panic!("{:x}: invalid stringtbl node type {:x}", ptr, t),
         };
-        call::push_stub(&mut exec.state, call::RESUME_E1, bi as u32);
+        call::push_stub(exec, call::RESUME_E1, bi as u32);
         exec.state.frame_ptr = exec.state.stack.len();
         match exec.state.mem[addr] {
             call::FUNC_C0 | call::FUNC_C1 => {
@@ -340,6 +349,7 @@ pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) -> Next {
 }
 
 pub fn resume_e2<G: Glk>(exec: &mut Execute<G>) -> Next{
+    trace::iosys(exec, "resume_e2");
     let val = read_u32(&exec.state.mem, exec.state.pc);
     if val == 0 {
         return Next::Ret(0);
@@ -353,6 +363,7 @@ pub fn resume_e2<G: Glk>(exec: &mut Execute<G>) -> Next{
 }
 
 pub fn resume_num<G: Glk>(exec: &mut Execute<G>, pos: usize) -> Next {
+    trace::iosys(exec, "resume_num");
     let num = exec.state.pc as i32;
     let size = {
         let mut size = 1;
@@ -374,25 +385,22 @@ pub fn resume_num<G: Glk>(exec: &mut Execute<G>, pos: usize) -> Next {
         return Next::Ret(0);
     }
     let val = if pos == 0 && num < 0 {
-        '-' as u32
+        '-' as u8
     } else {
-        let mut i = size;
+        let mut i = size - 1;
         let mut n = num;
         if n < 0 {
             n = -n;
-            i -= 1;
         }
-        while i > 0 {
+        while i > pos {
             i -= 1;
             n /= 10;
         }
-        '0' as u32 + n as u32
+        '0' as u8 + (n % 10) as u8
     };
-    exec.call_args.clear();
-    exec.call_args.push(val);
-    let addr = exec.iosys.rock as usize;
-    call::call(exec, addr, call::RESUME_NUM, pos as u32 + 1);
-    Next::Exec
+    call::push_stub(exec, call::RESUME_NUM, pos as u32 + 1);
+    exec.state.frame_ptr = exec.state.stack.len();
+    streamchar(exec, val, true)
 }
 
 pub fn save<G: Glk>(exec: &mut Execute<G>, outstream: u32) -> Result<()> {

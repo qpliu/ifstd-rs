@@ -1,7 +1,7 @@
 use glk::Glk;
 
-use super::{accel,iosys};
-use super::state::{read_u32,write_u32,State};
+use super::{accel,iosys,trace};
+use super::state::{read_u32,write_u32};
 use super::execute::{Execute,Next};
 
 pub const DISCARD: u32 = 0;
@@ -32,7 +32,7 @@ pub fn call<G: Glk>(exec: &mut Execute<G>, addr: usize, dest_type: u32, dest_add
             store_ret_result(exec, val, dest_type, dest_addr as usize);
         },
         None => {
-            push_stub(&mut exec.state, dest_type, dest_addr);
+            push_stub(exec, dest_type, dest_addr);
             call_func(exec, addr);
         },
     }
@@ -50,11 +50,12 @@ pub fn tailcall<G: Glk>(exec: &mut Execute<G>, addr: usize) -> Next {
     }
 }
 
-pub fn push_stub(state: &mut State, dest_type: u32, dest_addr: u32) {
-    state.stack.push(dest_type);
-    state.stack.push(dest_addr);
-    state.stack.push(state.pc as u32);
-    state.stack.push(state.frame_ptr as u32);
+pub fn push_stub<G: Glk>(exec: &mut Execute<G>, dest_type: u32, dest_addr: u32) {
+    exec.state.stack.push(dest_type);
+    exec.state.stack.push(dest_addr);
+    exec.state.stack.push(exec.state.pc as u32);
+    exec.state.stack.push(exec.state.frame_ptr as u32);
+    trace::push_call_stub(exec);
 }
 
 pub fn call_func<G: Glk>(exec: &mut Execute<G>, addr: usize) {
@@ -167,6 +168,7 @@ pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> Next {
         let frame_ptr = exec.state.frame_ptr;
         exec.state.stack.truncate(frame_ptr);
     }
+    trace::call_stub(exec);
     match exec.state.stack.pop() {
         None => return Next::Quit,
         Some(frame_ptr) => exec.state.frame_ptr = frame_ptr as usize,

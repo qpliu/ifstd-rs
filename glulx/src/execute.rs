@@ -14,7 +14,7 @@ pub enum Next {
 pub struct Execute<G: Glk> {
     pub state: State,
 
-    pub undo_state: state::UndoState<operand::Mode>,
+    pub undo_state: Vec<state::UndoState<operand::Mode>>,
     pub protected_range: (usize,usize),
     pub protected_tmp: Vec<u8>,
     pub rng: rand::XorShiftRng,
@@ -30,6 +30,8 @@ pub struct Execute<G: Glk> {
     pub frame_end: usize,
 
     pub glk: G,
+
+    pub trace: super::trace::Trace,
 }
 
 impl<G: Glk> Execute<G> {
@@ -39,7 +41,7 @@ impl<G: Glk> Execute<G> {
         let mut exec = Execute{
             state: state,
 
-            undo_state: state::UndoState::new(),
+            undo_state: Vec::new(),
             protected_range: (0,0),
             protected_tmp: Vec::new(),
             rng: rand::SeedableRng::from_seed(rand::random()),
@@ -54,6 +56,8 @@ impl<G: Glk> Execute<G> {
             frame_end: 0,
 
             glk: glk,
+
+            trace: super::trace::Trace::new(),
         };
         exec.start();
         exec
@@ -84,11 +88,11 @@ impl<G: Glk> Execute<G> {
             },
             _ => self.state.pc += 1,
         }
-        if cfg!(debug_trace) {
-            super::trace::trace(&self, opcode_addr, opcode);
-        }
+        super::trace::opcode(self, opcode_addr, opcode);
         match opcode {
-            opcode::NOP => (),
+            opcode::NOP => {
+                super::trace::frame(self);
+            },
             opcode::ADD => {
                 let (l1,l2,s1) = self.l1l2s1();
                 s1.store(self, l1.wrapping_add(l2));
@@ -251,7 +255,7 @@ impl<G: Glk> Execute<G> {
             },
             opcode::CATCH => {
                 let ((dest_type,dest_addr),l1) = self.s1l1();
-                call::push_stub(&mut self.state, dest_type, dest_addr);
+                call::push_stub(self, dest_type, dest_addr);
                 let catch_token = 4 * self.state.stack.len() as u32;
                 call::store_ret_result(self, catch_token, dest_type, dest_addr as usize);
                 return self.jump(l1);
@@ -366,6 +370,7 @@ impl<G: Glk> Execute<G> {
                 s1.store(self, val);
             },
             opcode::STKSWAP => {
+                super::trace::frame(self);
                 assert!(self.frame_end + 2 <= self.state.stack.len(), "{:x}:stkswap underflow", self.state.pc);
                 let index = self.state.stack.len()-1;
                 self.state.stack.swap(index,index-1);
@@ -455,6 +460,7 @@ impl<G: Glk> Execute<G> {
                 self.rng.reseed(if l1 == 0 { rand::random() } else { [l1; 4] });
             },
             opcode::QUIT => {
+                super::trace::frame(self);
                 return Next::Quit;
             },
             opcode::VERIFY => {
@@ -462,6 +468,7 @@ impl<G: Glk> Execute<G> {
                 s1.store(self, 0);
             },
             opcode::RESTART => {
+                super::trace::frame(self);
                 self.stash_protected_range();
                 self.state.reset_mem();
                 self.unstash_protected_range();
@@ -485,18 +492,37 @@ impl<G: Glk> Execute<G> {
             },
             opcode::SAVEUNDO => {
                 let s1 = self.s1();
-                self.undo_state.save(&self.state, s1);
-                s1.store(self, 0);
+                let mut result = 1;
+                for mut undo_state in &mut self.undo_state {
+                    if undo_state.save(&self.state, s1) {
+                        result = 0;
+                        break;
+                    }
+                }
+                if result != 0 {
+                    let mut undo_state = state::UndoState::new();
+                    if undo_state.save(&self.state, s1) {
+                        self.undo_state.push(undo_state);
+                        result = 0;
+                    }
+                }
+                s1.store(self, result);
             },
             opcode::RESTOREUNDO => {
                 let s1 = self.s1();
                 self.stash_protected_range();
-                match self.undo_state.restore(&mut self.state) {
-                    None => s1.store(self, 1),
-                    Some(s1) => {
+                let len = self.undo_state.len();
+                let mut failed = true;
+                for i in 0 .. len {
+                    if let Some(s1) = self.undo_state[len - i - 1].restore(&mut self.state) {
                         self.unstash_protected_range();
-                        s1.store(self, (-1i32) as u32);
-                    },
+                        s1.store(self, 0xffffffff);
+                        failed = false;
+                        break;
+                    }
+                }
+                if failed {
+                    s1.store(self, 1);
                 }
             },
             opcode::PROTECT => {
@@ -786,13 +812,19 @@ impl<G: Glk> Execute<G> {
 
     fn l1(&mut self) -> u32 {
         let (m1,_) = operand::next_mode(&mut self.state);
-        m1.load(self)
+        let l1 = m1.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::frame(self);
+        l1
     }
 
     fn l1l2(&mut self) -> (u32,u32) {
         let (m1,m2) = operand::next_mode(&mut self.state);
         let l1 = m1.load(self);
         let l2 = m2.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::frame(self);
         (l1,l2)
     }
 
@@ -802,6 +834,10 @@ impl<G: Glk> Execute<G> {
         let l1 = m1.load(self);
         let l2 = m2.load(self);
         let l3 = m3.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, Some(l3));
+        super::trace::frame(self);
         (l1,l2,l3)
     }
 
@@ -812,12 +848,20 @@ impl<G: Glk> Execute<G> {
         let l2 = m2.load(self);
         let l3 = m3.load(self);
         let l4 = m4.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, Some(l3));
+        super::trace::operand(self, &m4, Some(l4));
+        super::trace::frame(self);
         (l1,l2,l3,l4)
     }
 
     fn l1s1(&mut self) -> (u32,operand::Mode) {
         let (m1,m2) = operand::next_mode(&mut self.state);
         let l1 = m1.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, None);
+        super::trace::frame(self);
         (l1,m2)
     }
 
@@ -826,6 +870,10 @@ impl<G: Glk> Execute<G> {
         let (m3,_) = operand::next_mode(&mut self.state);
         let l1 = m1.load(self);
         let l2 = m2.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, None);
+        super::trace::frame(self);
         (l1,l2,m3)
     }
 
@@ -835,6 +883,11 @@ impl<G: Glk> Execute<G> {
         let l1 = m1.load(self);
         let l2 = m2.load(self);
         let l3 = m3.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, Some(l3));
+        super::trace::operand(self, &m4, None);
+        super::trace::frame(self);
         (l1,l2,l3,m4)
     }
 
@@ -843,6 +896,11 @@ impl<G: Glk> Execute<G> {
         let (m3,m4) = operand::next_mode(&mut self.state);
         let l1 = m1.load(self);
         let l2 = m2.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, None);
+        super::trace::operand(self, &m4, None);
+        super::trace::frame(self);
         (l1,l2,m3,m4)
     }
 
@@ -854,6 +912,12 @@ impl<G: Glk> Execute<G> {
         let l2 = m2.load(self);
         let l3 = m3.load(self);
         let l4 = m4.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, Some(l3));
+        super::trace::operand(self, &m4, Some(l4));
+        super::trace::operand(self, &m5, None);
+        super::trace::frame(self);
         (l1,l2,l3,l4,m5)
     }
 
@@ -868,6 +932,14 @@ impl<G: Glk> Execute<G> {
         let l4 = m4.load(self);
         let l5 = m5.load(self);
         let l6 = m6.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, Some(l3));
+        super::trace::operand(self, &m4, Some(l4));
+        super::trace::operand(self, &m5, Some(l5));
+        super::trace::operand(self, &m6, Some(l6));
+        super::trace::operand(self, &m7, None);
+        super::trace::frame(self);
         (l1,l2,l3,l4,l5,l6,m7)
     }
 
@@ -883,11 +955,22 @@ impl<G: Glk> Execute<G> {
         let l5 = m5.load(self);
         let l6 = m6.load(self);
         let l7 = m7.load(self);
+        super::trace::operand(self, &m1, Some(l1));
+        super::trace::operand(self, &m2, Some(l2));
+        super::trace::operand(self, &m3, Some(l3));
+        super::trace::operand(self, &m4, Some(l4));
+        super::trace::operand(self, &m5, Some(l5));
+        super::trace::operand(self, &m6, Some(l6));
+        super::trace::operand(self, &m7, Some(l7));
+        super::trace::operand(self, &m8, None);
+        super::trace::frame(self);
         (l1,l2,l3,l4,l5,l6,l7,m8)
     }
 
     fn s1(&mut self) -> operand::Mode {
         let (m1,_) = operand::next_mode(&mut self.state);
+        super::trace::operand(self, &m1, None);
+        super::trace::frame(self);
         m1
     }
 
@@ -895,11 +978,18 @@ impl<G: Glk> Execute<G> {
         let (m1,m2) = operand::next_mode(&mut self.state);
         let result_dest = m1.result_dest(self);
         let l1 = m2.load(self);
+        super::trace::operand(self, &m1, None);
+        super::trace::operand(self, &m2, Some(l1));
+        super::trace::frame(self);
         (result_dest,l1)
     }
 
     fn s1s2(&mut self) -> (operand::Mode,operand::Mode) {
-        operand::next_mode(&mut self.state)
+        let (m1,m2) = operand::next_mode(&mut self.state);
+        super::trace::operand(self, &m1, None);
+        super::trace::operand(self, &m2, None);
+        super::trace::frame(self);
+        (m1,m2)
     }
 
     fn jump(&mut self, offset: u32) -> Next {

@@ -109,7 +109,10 @@ impl<T: Copy> UndoState<T> {
         }
     }
 
-    pub fn save(&mut self, state: &State, addr_mode: T) {
+    pub fn save(&mut self, state: &State, addr_mode: T) -> bool {
+        if self.addr_mode.is_some() {
+            return false;
+        }
         self.addr_mode = Some(addr_mode);
         self.mem.clear();
         self.mem.extend_from_slice(&state.mem);
@@ -120,24 +123,24 @@ impl<T: Copy> UndoState<T> {
         self.heap_ptr = state.heap_ptr;
         self.heap.clear();
         self.heap.extend_from_slice(&state.heap);
+        true
     }
 
-    pub fn restore(&self, state: &mut State) -> Option<T> {
-        match self.addr_mode {
-            None => None,
-            addr_mode => {
-                state.mem.clear();
-                state.mem.extend_from_slice(&self.mem);
-                state.pc = self.pc;
-                state.stack.clear();
-                state.stack.extend_from_slice(&self.stack);
-                state.frame_ptr = self.frame_ptr;
-                state.heap_ptr = self.heap_ptr;
-                state.heap.clear();
-                state.heap.extend_from_slice(&self.heap);
-                addr_mode
-            },
+    pub fn restore(&mut self, state: &mut State) -> Option<T> {
+        let addr_mode = self.addr_mode;
+        if addr_mode.is_some() {
+            state.mem.clear();
+            state.mem.extend_from_slice(&self.mem);
+            state.pc = self.pc;
+            state.stack.clear();
+            state.stack.extend_from_slice(&self.stack);
+            state.frame_ptr = self.frame_ptr;
+            state.heap_ptr = self.heap_ptr;
+            state.heap.clear();
+            state.heap.extend_from_slice(&self.heap);
+            self.addr_mode = None;
         }
+        addr_mode
     }
 }
 
