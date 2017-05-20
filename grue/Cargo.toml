@@ -4,6 +4,14 @@ version = "0.1.0"
 description = "Glulx RUst Execution"
 
 [dependencies]
+iff-rs = { git = "https://github.com/qpliu/iff-rs" }
 glk-rs = { path = "../glk", version = "0.1" }
 cheapglk-rs = { path = "../cheapglk", version = "0.1" }
+glkterm-rs = { path = "../glkterm", version = "0.1" }
 glulx-rs = { path = "../glulx", version = "0.1" }
+
+[[bin]]
+name = "cheap-grue"
+
+[[bin]]
+name = "grue"

@@ -39,6 +39,7 @@ mod internal {
     use std::env;
     use std::fs::File;
     use std::io::Write;
+    use std::time::Instant;
     use glk::Glk;
     use super::super::execute::Execute;
     use super::super::operand::Mode;
@@ -46,6 +47,7 @@ mod internal {
 
     pub struct Trace {
         out: Option<File>,
+        start: Instant,
     }
 
     impl Trace {
@@ -59,18 +61,25 @@ mod internal {
             } else {
                 None
             };
-            Trace{ out }
+            Trace{ out, start: Instant::now() }
         }
     }
 
+    fn timestamp<W: Write>(out: &mut W, start: Instant) {
+        let t = Instant::now().duration_since(start);
+        out.write(format!("{:03}.{:06}:", t.as_secs(), t.subsec_nanos()/1000).as_bytes()).unwrap();
+    }
+
     pub fn opcode<G: Glk>(exec: &mut Execute<G>, addr: usize, opcode: u32) {
-        if let &mut Some(ref mut out) = &mut exec.trace.out {
+        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
+            timestamp(out, start);
             out.write(format!("{:06x}:{:03x} {:10.10}", addr, opcode, opcode_name(opcode)).as_bytes()).unwrap();
         }
     }
 
     pub fn iosys<G: Glk>(exec: &mut Execute<G>, op: &'static str) {
-        if let &mut Some(ref mut out) = &mut exec.trace.out {
+        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
+            timestamp(out, start);
             out.write(format!("{:06x}: {:10.10} Fr:{:x}/{:x}\n", exec.state.pc, op, exec.state.frame_ptr, exec.state.stack.len()).as_bytes()).unwrap();
 
         }
@@ -85,7 +94,7 @@ mod internal {
         }
     }
 
-    pub  fn frame<G: Glk>(exec: &mut Execute<G>) {
+    pub fn frame<G: Glk>(exec: &mut Execute<G>) {
         if let &mut Some(ref mut out) = &mut exec.trace.out {
             out.write(format!(" === Fr:{:x}:{:x}:{:x} [", exec.state.frame_ptr, exec.frame_locals, exec.frame_end).as_bytes()).unwrap();
             for i in exec.frame_locals .. exec.frame_end {
@@ -100,20 +109,23 @@ mod internal {
     }
 
     pub fn push_call_stub<G: Glk>(exec: &mut Execute<G>) {
-        if let &mut Some(ref mut out) = &mut exec.trace.out {
+        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
+            timestamp(out, start);
             if exec.state.stack.len() < 4 {
                 return;
             }
+            timestamp(out, start);
             let i = exec.state.stack.len();
             out.write(format!("push_call_stub: dest: type:{:x} addr:{:x} pc:{:x} fr:{:x} St:{:x}\n", exec.state.stack[i-4], exec.state.stack[i-3], exec.state.stack[i-2], exec.state.stack[i-1], exec.state.stack.len()).as_bytes()).unwrap();
         }
     }
 
     pub fn call_stub<G: Glk>(exec: &mut Execute<G>) {
-        if let &mut Some(ref mut out) = &mut exec.trace.out {
+        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
             if exec.state.stack.len() < 4 {
                 return;
             }
+            timestamp(out, start);
             let i = exec.state.stack.len();
             out.write(format!("call_stub: dest: type:{:x} addr:{:x} pc:{:x} fr:{:x} St:{:x}\n", exec.state.stack[i-4], exec.state.stack[i-3], exec.state.stack[i-2], exec.state.stack[i-1], exec.state.stack.len()).as_bytes()).unwrap();
         }
