@@ -1,0 +1,9 @@
+[package]
+name = "glktest"
+version = "0.1.0"
+
+[dependencies]
+glk-rs = { path = "../glk", version = "0.1" }
+
+[lib]
+name = "glktest"

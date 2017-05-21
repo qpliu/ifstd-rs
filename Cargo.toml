@@ -1,2 +1,2 @@
 [workspace]
-members = ["glk","glulx","cheapglk","glkterm","grue"]
+members = ["glk","glulx","cheapglk","glkterm","glktest","grue"]
