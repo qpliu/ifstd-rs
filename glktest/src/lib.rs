@@ -13,7 +13,8 @@ struct MemoryStream {
     rock: u32,
     readcount: u32,
     writecount: u32,
-    out: (u32,Box<[u8]>),
+    out: Option<(u32,Box<[u8]>)>,
+    out_uni: Option<(u32,Box<[u32]>)>,
 }
 
 pub struct GlkTest<'a> {
@@ -127,7 +128,8 @@ impl<'a> Glk for GlkTest<'a> {
                     rock: 0,
                     readcount: 0,
                     writecount: 0,
-                    out: (0,vec![].into_boxed_slice()),
+                    out: None,
+                    out_uni: None,
                 });
             self.root = index;
             self.rock = rock;
@@ -222,7 +224,8 @@ impl<'a> Glk for GlkTest<'a> {
                 rock: rock,
                 readcount: 0,
                 writecount: 0,
-                out: buf,
+                out: Some(buf),
+                out_uni: None,
             });
         StrId(index)
     }
@@ -232,13 +235,13 @@ impl<'a> Glk for GlkTest<'a> {
             return (0,0,None,None);
         }
         let stream = self.streams[str.0].take().unwrap();
-        (stream.readcount,stream.writecount,Some(stream.out),None)
+        (stream.readcount,stream.writecount,stream.out,stream.out_uni)
     }
 
     fn stream_iterate(&mut self, str: &Self::StrId) -> (Self::StrId,u32) {
         if str.0 < self.streams.len() {
             for i in str.0 + 1 .. self.streams.len() {
-                if let &Some(MemoryStream{ rock, readcount:_, writecount:_ , out:_ }) = &self.streams[i] {
+                if let &Some(MemoryStream{ rock, readcount:_, writecount:_ , out:_, out_uni:_ }) = &self.streams[i] {
                     return (StrId(i),rock);
                 }
             }
@@ -247,7 +250,7 @@ impl<'a> Glk for GlkTest<'a> {
     }
 
     fn stream_get_rock(&mut self, str: &Self::StrId) -> u32 {
-        if let Some(&Some(MemoryStream{ rock, readcount:_, writecount:_ , out:_ })) = self.streams.get(str.0) {
+        if let Some(&Some(MemoryStream{ rock, readcount:_, writecount:_ , out:_, out_uni:_ })) = self.streams.get(str.0) {
             rock
         } else {
             0
@@ -259,7 +262,7 @@ impl<'a> Glk for GlkTest<'a> {
     }
 
     fn stream_get_position(&mut self, str: &Self::StrId) -> u32 {
-        if let Some(&Some(MemoryStream{ rock:_, readcount:_, writecount, out:_ })) = self.streams.get(str.0) {
+        if let Some(&Some(MemoryStream{ rock:_, readcount:_, writecount, out:_, out_uni:_ })) = self.streams.get(str.0) {
             writecount
         } else {
             0
@@ -276,22 +279,22 @@ impl<'a> Glk for GlkTest<'a> {
 
 
     fn put_char(&mut self, ch: u8) {
-        if let Some(&mut Some(MemoryStream{ rock:_, readcount:_, ref mut writecount, out:(_,ref mut mem) })) = self.streams.get_mut(self.current) {
-            if self.current == self.root {
-                self.out.push(ch as char);
-            } else if *writecount < mem.len() as u32 {
-                mem[*writecount as usize] = ch;
-            }
-            *writecount += 1;
-        }
+        let str = StrId(self.current);
+        self.put_char_stream(&str, ch);
     }
 
     fn put_char_stream(&mut self, str: &Self::StrId, ch: u8) {
-        if let Some(&mut Some(MemoryStream{ rock:_, readcount:_, ref mut writecount, out:(_,ref mut mem) })) = self.streams.get_mut(str.0) {
-            if str.0 == self.root {
+        if let Some(&mut Some(MemoryStream{ rock:_, readcount:_, ref mut writecount, ref mut out, ref mut out_uni })) = self.streams.get_mut(str.0) {
+            if self.current == self.root {
                 self.out.push(ch as char);
-            } else if *writecount < mem.len() as u32 {
-                mem[*writecount as usize] = ch;
+            } else if let &mut Some((_,ref mut mem)) = out {
+                if *writecount < mem.len() as u32 {
+                    mem[*writecount as usize] = ch;
+                }
+            } else if let &mut Some((_,ref mut mem)) = out_uni {
+                if *writecount < mem.len() as u32 {
+                    mem[*writecount as usize] = ch as u32;
+                }
             }
             *writecount += 1;
         }
@@ -471,19 +474,8 @@ impl<'a> Glk for GlkTest<'a> {
 
 
     fn put_char_uni(&mut self, ch: u32) {
-        if let Some(&mut Some(MemoryStream{ rock:_, readcount:_, ref mut writecount, out:(_,ref mut mem) })) = self.streams.get_mut(self.current) {
-            if self.current == self.root {
-                if let Some(c) = std::char::from_u32(ch) {
-                    self.out.push(c);
-                }
-            } else if *writecount*4+3 < mem.len() as u32 {
-                mem[*writecount as usize * 4] = (ch >> 24) as u8;
-                mem[*writecount as usize * 4 + 1] = (ch >> 16) as u8;
-                mem[*writecount as usize * 4 + 2] = (ch >> 8) as u8;
-                mem[*writecount as usize * 4 + 3] = ch as u8;
-            }
-            *writecount += 1;
-        }
+        let str = StrId(self.current);
+        self.put_char_stream_uni(&str, ch);
     }
 
     fn put_string_uni<SU: AsRef<[u32]>>(&mut self, s: SU) {
@@ -499,16 +491,19 @@ impl<'a> Glk for GlkTest<'a> {
     }
 
     fn put_char_stream_uni(&mut self, str: &Self::StrId, ch: u32) {
-        if let Some(&mut Some(MemoryStream{ rock:_, readcount:_, ref mut writecount, out:(_,ref mut mem) })) = self.streams.get_mut(str.0) {
-            if str.0 == self.root {
+        if let Some(&mut Some(MemoryStream{ rock:_, readcount:_, ref mut writecount, ref mut out, ref mut out_uni })) = self.streams.get_mut(str.0) {
+            if self.current == self.root {
                 if let Some(c) = std::char::from_u32(ch) {
                     self.out.push(c);
                 }
-            } else if *writecount < mem.len() as u32 {
-                mem[*writecount as usize * 4] = (ch >> 24) as u8;
-                mem[*writecount as usize * 4 + 1] = (ch >> 16) as u8;
-                mem[*writecount as usize * 4 + 2] = (ch >> 8) as u8;
-                mem[*writecount as usize * 4 + 3] = ch as u8;
+            } else if let &mut Some((_,ref mut mem)) = out {
+                if *writecount < mem.len() as u32 {
+                    mem[*writecount as usize] = ch as u8;
+                }
+            } else if let &mut Some((_,ref mut mem)) = out_uni {
+                if *writecount < mem.len() as u32 {
+                    mem[*writecount as usize] = ch;
+                }
             }
             *writecount += 1;
         }
@@ -544,8 +539,26 @@ impl<'a> Glk for GlkTest<'a> {
         StrId(0)
     }
 
-    fn stream_open_memory_uni(&mut self, _buf: (u32,Box<[u32]>), _fmode: u32, _rock: u32) -> Self::StrId {
-        StrId(0)
+    fn stream_open_memory_uni(&mut self, buf: (u32,Box<[u32]>), _fmode: u32, rock: u32) -> Self::StrId {
+        let mut index = 0;
+        for i in 1 .. self.streams.len() {
+            if self.streams[i].is_none() {
+                index = i;
+                break;
+            }
+        }
+        if index == 0 {
+            index = self.streams.len();
+            self.streams.push(None);
+        }
+        self.streams[index] = Some(MemoryStream{
+                rock: rock,
+                readcount: 0,
+                writecount: 0,
+                out: None,
+                out_uni: Some(buf),
+            });
+        StrId(index)
     }
 
 
