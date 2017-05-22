@@ -77,6 +77,7 @@ impl<'a> Glk for GlkTest<'a> {
                     glk::gestalt_CharOutput_CannotPrint
                 }
             },
+            glk::gestalt_Unicode => 1,
             _ => 0,
         }
     }
@@ -95,6 +96,7 @@ impl<'a> Glk for GlkTest<'a> {
                     glk::gestalt_CharOutput_CannotPrint
                 }
             },
+            glk::gestalt_Unicode => 1,
             _ => 0,
         }
     }
@@ -464,16 +466,49 @@ impl<'a> Glk for GlkTest<'a> {
     }
 
 
-    fn buffer_to_lower_case_uni(&mut self, _buf: &mut [u32], _numchars: u32) -> u32 {
-        0
+    fn buffer_to_lower_case_uni(&mut self, buf: &mut [u32], numchars: u32) -> u32 {
+        let mut chars: Vec<char> = vec![];
+        for i in 0 .. numchars as usize {
+            if let Some(ch) = std::char::from_u32(buf[i]) {
+                chars.extend(ch.to_lowercase());
+            }
+        }
+        for i in 0 .. std::cmp::min(chars.len(), buf.len()) {
+            buf[i] = chars[i] as u32;
+        }
+        chars.len() as u32
     }
 
-    fn buffer_to_upper_case_uni(&mut self, _buf: &mut [u32], _numchars: u32) -> u32 {
-        0
+    fn buffer_to_upper_case_uni(&mut self, buf: &mut [u32], numchars: u32) -> u32 {
+        let mut chars: Vec<char> = vec![];
+        for i in 0 .. numchars as usize {
+            if let Some(ch) = std::char::from_u32(buf[i]) {
+                chars.extend(ch.to_uppercase());
+            }
+        }
+        for i in 0 .. std::cmp::min(chars.len(), buf.len()) {
+            buf[i] = chars[i] as u32;
+        }
+        chars.len() as u32
     }
 
-    fn buffer_to_title_case_uni(&mut self, _buf: &mut [u32], _numchars: u32, _lowerrest: u32) -> u32 {
-        0
+    fn buffer_to_title_case_uni(&mut self, buf: &mut [u32], numchars: u32, lowerrest: u32) -> u32 {
+        let mut chars: Vec<char> = vec![];
+        for i in 0 .. numchars as usize {
+            if let Some(ch) = std::char::from_u32(buf[i]) {
+                if i == 0 {
+                    chars.extend(ch.to_uppercase());
+                } else if lowerrest != 0 {
+                    chars.extend(ch.to_lowercase());
+                } else {
+                    chars.push(ch);
+                }
+            }
+        }
+        for i in 0 .. std::cmp::min(chars.len(), buf.len()) {
+            buf[i] = chars[i] as u32;
+        }
+        chars.len() as u32
     }
 
 

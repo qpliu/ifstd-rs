@@ -153,7 +153,7 @@ fn nullio() {
 
 #[test]
 fn glk() {
-    unimplemented!();
+    test("glk", "Glk opcode:\n\nlowercase \'A\'=97, lowercase \'B\'=98, lowercase \'C\'=99\nlowercase \'A\'=97, lowercase \'B\'=98, lowercase \'C\'=99\nlowercase \'D\'=100, lowercase \'E\'=101, lowercase \'F\'=102\nlowercase \'D\'=100, lowercase \'E\'=101, lowercase \'F\'=102\nlowercase \'G\'=103, lowercase \'H\'=104, lowercase \'I\'=105\nguard=999\nwindow=1, rock=201\nwindow=1, rock=201\nwindow=1, rock=201\nwindow=1, rock=201\nselect_poll=0, result=0000\nselect_poll=0, result=0000\nguard=999\nlen=14 \"up-case ãäδεд.\" len 14\nPassed.\n\n>");
 }
 
 #[test]
@@ -206,7 +206,7 @@ fn extundo() {
 
 #[test]
 fn restore() {
-    unimplemented!();
+    test("restore", "Restore:\n\nSimple restore.\nSaving...\nSaved.\nRestoring...\n\n>");
 }
 
 #[test]
