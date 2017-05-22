@@ -7,11 +7,13 @@ mod common;
 
 const INTRO: &'static str = "\nGlulxercise: A Glulx interpreter unit test\nRelease 9 / Serial number 161114 / Inform v6.34, compiler options S\nInterpreter version 0.1.0 / VM 3.1.2 / game file format 3.1.3\n\nA voice booooms out: Welcome to the test chamber.\n\nType \"help\" to repeat this message, \"quit\" to exit, \"all\" to run all tests, or one of the following test options: \"operand\", \"arith\", \"bigmul\", \"comvar\", \"comarith\", \"bitwise\", \"shift\", \"trunc\", \"extend\", \"aload\", \"astore\", \"arraybit\", \"call\", \"callstack\", \"jump\", \"jumpform\", \"compare\", \"stack\", \"gestalt\", \"throw\", \"streamnum\", \"strings\", \"ramstring\", \"iosys\", \"iosys2\", \"filter\", \"nullio\", \"glk\", \"gidispa\", \"random\", \"nonrandom\", \"search\", \"mzero\", \"mcopy\", \"undo\", \"multiundo\", \"extundo\", \"restore\", \"verify\", \"protect\", \"memsize\", \"undomemsize\", \"undorestart\", \"heap\", \"undoheap\", \"acceleration\", \"floatconv\", \"floatarith\", \"floatmod\", \"floatround\", \"floatexp\", \"floattrig\", \"floatatan2\", \"fjumpform\", \"fjump\", \"fcompare\", \"fprint\", \"safari5\".\n\n>";
 
-fn test(test: &'static str, output: &'static str) {
-    assert!(common::run_test("glulxercise.ulx", vec![
-                (Match(INTRO), test),
-                (Match(output), "quit"),
-                ]).is_ok());
+fn test(test: &str, output: &str) {
+    let result = common::run_test("glulxercise.ulx", vec![
+            (Match(INTRO), test),
+            (Match(output), "quit"),
+            ]);
+    assert!(result.is_ok());
+    assert_eq!("\nExiting via return. (Try \"opquit\" for @quit, \"glkquit\" for glk_exit().)\n\nGoodbye.\n", result.unwrap());
 }
 
 #[test]

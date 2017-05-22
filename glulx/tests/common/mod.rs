@@ -18,9 +18,10 @@ fn testdata(name: &'static str) -> Result<File> {
     File::open(path)
 }
 
-pub fn run_test<'a>(ulx_file: &'static str, test: Vec<(glktest::TestOutput<'a>,&'a str)>) -> Result<()> {
+pub fn run_test<'a>(ulx_file: &'static str, test: Vec<(glktest::TestOutput<'a>,&'a str)>) -> Result<String> {
     let mut ulx = testdata(ulx_file)?;
     let glk = glktest::GlkTest::new(test);
-    glulx::run(glk, &mut ulx, None);
-    Ok(())
+    let (glk,result) = glulx::run(glk, &mut ulx, None);
+    result?;
+    Ok(glk.output())
 }

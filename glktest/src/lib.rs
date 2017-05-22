@@ -40,6 +40,10 @@ impl<'a> GlkTest<'a> {
             test: test,
         }
     }
+
+    pub fn output(self) -> String {
+        self.out
+    }
 }
 
 impl<'a> Glk for GlkTest<'a> {
