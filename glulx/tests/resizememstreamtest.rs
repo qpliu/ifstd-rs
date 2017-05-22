@@ -1,8 +1,6 @@
 extern crate glktest;
 extern crate glulx;
 
-use glktest::TestOutput::Match;
-
 mod common;
 
 #[test]

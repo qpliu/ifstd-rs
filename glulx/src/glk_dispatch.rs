@@ -269,6 +269,9 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let buflen = exec.call_args[1] as usize;
             let fmode = exec.call_args[2];
             let rock = exec.call_args[3];
+            if bufaddr+buflen > exec.state.mem.len() {
+                panic!("Memory access out of range");
+            }
             let buf = exec.dispatch.get_buffer8(buflen);
             let str = exec.glk.stream_open_memory((bufaddr as u32,buf), fmode, rock);
             exec.dispatch.strids.get_index(str)
@@ -813,6 +816,9 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
             let buflen = exec.call_args[1] as usize;
             let fmode = exec.call_args[2];
             let rock = exec.call_args[3];
+            if bufaddr + buflen*4 > exec.state.mem.len() {
+                panic!("Memory access out of range");
+            }
             let buf = exec.dispatch.get_buffer32(buflen);
             let str = exec.glk.stream_open_memory_uni((bufaddr as u32,buf), fmode, rock);
             exec.dispatch.strids.get_index(str)
@@ -944,7 +950,12 @@ fn write_arrayref8<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u8]>) {
             exec.state.stack.push(arr[i] as u32);
         }
     } else if addr >= exec.ram_start {
-        write_arr8(&mut exec.state.mem, addr, &arr);
+        if addr + arr.len() <= exec.state.mem.len() {
+            write_arr8(&mut exec.state.mem, addr, &arr);
+        } else if addr < exec.state.mem.len() {
+            let len = exec.state.mem.len() - addr;
+            write_arr8(&mut exec.state.mem, addr, &arr[0..len]);
+        }
     }
     exec.dispatch.put_buffer8(arr);
 }
@@ -967,7 +978,12 @@ fn write_arrayref32<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u32]>)
             exec.state.stack.push(arr[i]);
         }
     } else if addr >= exec.ram_start {
-        write_arr32(&mut exec.state.mem, addr, &arr);
+        if addr + 4*arr.len() <= exec.state.mem.len() {
+            write_arr32(&mut exec.state.mem, addr, &arr);
+        } else if addr < exec.state.mem.len() {
+            let len = (exec.state.mem.len() - addr)/4;
+            write_arr32(&mut exec.state.mem, addr, &arr[0..len]);
+        }
     }
     exec.dispatch.put_buffer32(arr);
 }
