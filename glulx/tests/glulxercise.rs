@@ -206,7 +206,7 @@ fn extundo() {
 
 #[test]
 fn restore() {
-    test("restore", "Restore:\n\nSimple restore.\nSaving...\nSaved.\nRestoring...\n\n>");
+    test("restore", "Restore:\n\n(Deleting existing save file)\nSimple restore.\nSaving...\nSaved.\nRestoring...\n\n>");
 }
 
 #[test]
