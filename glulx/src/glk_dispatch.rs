@@ -4,7 +4,7 @@ use super::glk_selector;
 use super::execute::Execute;
 use super::state::{cstr,read_arr8,read_arr32,read_u32,write_arr8,write_arr32,write_u32};
 
-pub struct Dispatch<G: Glk> {
+pub struct Dispatch<'a,G: Glk<'a>> {
     winids: Registry<G::WinId>,
     strids: Registry<G::StrId>,
     frefids: Registry<G::FRefId>,
@@ -14,7 +14,7 @@ pub struct Dispatch<G: Glk> {
     buffer32: Option<Vec<u32>>,
 }
 
-impl<G: Glk> Dispatch<G> {
+impl<'a,G: Glk<'a>> Dispatch<'a,G> {
     pub fn new() -> Self {
         Dispatch{
             winids: Registry::new(),
@@ -116,7 +116,7 @@ impl<T: IdType> Registry<T> {
     }
 }
 
-pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
+pub fn dispatch<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, glksel: u32) -> u32 {
     match glksel {
         glk_selector::EXIT => exec.glk.exit(),
         glk_selector::SET_INTERRUPT_HANDLER => 0,
@@ -932,7 +932,7 @@ pub fn dispatch<G: Glk>(exec: &mut Execute<G>, glksel: u32) -> u32 {
     }
 }
 
-fn read_arrayref8<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> Box<[u8]> {
+fn read_arrayref8<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, len: usize) -> Box<[u8]> {
     let mut arr = exec.dispatch.get_buffer8(len);
     if addr == 0xffffffff {
         for i in 0 .. len {
@@ -944,7 +944,7 @@ fn read_arrayref8<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> Box
     arr
 }
 
-fn write_arrayref8<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u8]>) {
+fn write_arrayref8<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, arr: Box<[u8]>) {
     if addr == 0xffffffff {
         for i in 0 .. arr.len() {
             exec.state.stack.push(arr[i] as u32);
@@ -960,7 +960,7 @@ fn write_arrayref8<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u8]>) {
     exec.dispatch.put_buffer8(arr);
 }
 
-fn read_arrayref32<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> Box<[u32]> {
+fn read_arrayref32<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, len: usize) -> Box<[u32]> {
     let mut arr = exec.dispatch.get_buffer32(len);
     if addr == 0xffffffff {
         for i in 0 .. len {
@@ -972,7 +972,7 @@ fn read_arrayref32<G: Glk>(exec: &mut Execute<G>, addr: usize, len: usize) -> Bo
     arr
 }
 
-fn write_arrayref32<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u32]>) {
+fn write_arrayref32<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, arr: Box<[u32]>) {
     if addr == 0xffffffff {
         for i in 0 .. arr.len() {
             exec.state.stack.push(arr[i]);
@@ -988,7 +988,7 @@ fn write_arrayref32<G: Glk>(exec: &mut Execute<G>, addr: usize, arr: Box<[u32]>)
     exec.dispatch.put_buffer32(arr);
 }
 
-fn read_cstr_uni<G: Glk>(exec: &mut Execute<G>, addr: usize) -> Box<[u32]> {
+fn read_cstr_uni<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize) -> Box<[u32]> {
     for len in 0 .. {
         if read_u32(&exec.state.mem, addr + 4*len) == 0 {
             return read_arrayref32(exec, addr, len);
@@ -998,7 +998,7 @@ fn read_cstr_uni<G: Glk>(exec: &mut Execute<G>, addr: usize) -> Box<[u32]> {
 }
 
 
-fn write_ref<G: Glk>(exec: &mut Execute<G>, addr: usize, val: u32) {
+fn write_ref<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, val: u32) {
     if addr == 0xffffffff {
         exec.state.stack.push(val);
     } else if addr >= exec.ram_start {
@@ -1006,7 +1006,7 @@ fn write_ref<G: Glk>(exec: &mut Execute<G>, addr: usize, val: u32) {
     }
 }
 
-fn write_stream_result<G: Glk>(exec: &mut Execute<G>, addr: usize, stream_result: (u32,u32,Option<(u32,Box<[u8]>)>,Option<(u32,Box<[u32]>)>)) {
+fn write_stream_result<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, stream_result: (u32,u32,Option<(u32,Box<[u8]>)>,Option<(u32,Box<[u32]>)>)) {
     let (readcount,writecount,buf,buf_uni) = stream_result;
     let mut arr = exec.dispatch.get_buffer32(2);
     arr[0] = readcount;
@@ -1020,7 +1020,7 @@ fn write_stream_result<G: Glk>(exec: &mut Execute<G>, addr: usize, stream_result
     }
 }
 
-fn write_event<G: Glk>(exec: &mut Execute<G>, addr: usize, mut event: G::Event) {
+fn write_event<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, mut event: G::Event) {
     let mut arr = exec.dispatch.get_buffer32(4);
     arr[0] = event.evtype();
     arr[1] = exec.dispatch.winids.get_index(event.win());
@@ -1035,7 +1035,7 @@ fn write_event<G: Glk>(exec: &mut Execute<G>, addr: usize, mut event: G::Event) 
     }
 }
 
-fn read_time<G: Glk>(exec: &mut Execute<G>, addr: usize) -> G::TimeVal {
+fn read_time<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize) -> G::TimeVal {
     let arr = read_arrayref32(exec, addr, 3);
     let high_sec = arr[0] as i32;
     let low_sec = arr[1];
@@ -1044,7 +1044,7 @@ fn read_time<G: Glk>(exec: &mut Execute<G>, addr: usize) -> G::TimeVal {
     G::TimeVal::new(high_sec, low_sec, microsec)
 }
 
-fn write_time<G: Glk>(exec: &mut Execute<G>, addr: usize, time: G::TimeVal) {
+fn write_time<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, time: G::TimeVal) {
     let mut arr = exec.dispatch.get_buffer32(3);
     arr[0] = time.high_sec() as u32;
     arr[1] = time.low_sec();
@@ -1052,7 +1052,7 @@ fn write_time<G: Glk>(exec: &mut Execute<G>, addr: usize, time: G::TimeVal) {
     write_arrayref32(exec, addr, arr);
 }
 
-fn read_date<G: Glk>(exec: &mut Execute<G>, addr: usize) -> G::Date {
+fn read_date<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize) -> G::Date {
     let arr = read_arrayref32(exec, addr, 8);
     let year = arr[0] as i32;
     let month = arr[1] as i32;
@@ -1066,7 +1066,7 @@ fn read_date<G: Glk>(exec: &mut Execute<G>, addr: usize) -> G::Date {
     G::Date::new(year, month, day, weekday, hour, minute, second, microsec)
 }
 
-fn write_date<G: Glk>(exec: &mut Execute<G>, addr: usize, date: G::Date) {
+fn write_date<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, date: G::Date) {
     let mut arr = exec.dispatch.get_buffer32(8);
     arr[0] = date.year() as u32;
     arr[1] = date.month() as u32;

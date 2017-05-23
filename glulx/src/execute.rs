@@ -12,7 +12,7 @@ pub enum Next {
     Ret(u32),
 }
 
-pub struct Execute<G: Glk> {
+pub struct Execute<'a,G: Glk<'a>> {
     pub state: State,
 
     pub undo_state: Vec<state::UndoState<operand::Mode>>,
@@ -23,7 +23,7 @@ pub struct Execute<G: Glk> {
     pub call_args: Vec<u32>,
     pub iosys: iosys::IOSys,
     pub accel: accel::Accel,
-    pub dispatch: glk_dispatch::Dispatch<G>,
+    pub dispatch: glk_dispatch::Dispatch<'a,G>,
 
     // Cache repeatedly used values
     pub ram_start: usize,
@@ -35,7 +35,7 @@ pub struct Execute<G: Glk> {
     pub trace: super::trace::Trace,
 }
 
-impl<G: Glk> Execute<G> {
+impl<'a,G: Glk<'a>> Execute<'a,G> {
     pub fn new(state: State, glk: G) -> Self {
         let stringtbl = read_u32(&state.rom, 28) as usize;
         let ram_start = read_u32(&state.rom, 8) as usize;

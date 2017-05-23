@@ -58,7 +58,7 @@ pub fn supported(mode: u32) -> bool {
     }
 }
 
-pub fn streamchar<G: Glk>(exec: &mut Execute<G>, val: u8, within_string: bool) -> Next {
+pub fn streamchar<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, val: u8, within_string: bool) -> Next {
     trace::iosys(exec, "streamchar");
     match exec.iosys.mode {
         Mode::Null => {
@@ -86,7 +86,7 @@ pub fn streamchar<G: Glk>(exec: &mut Execute<G>, val: u8, within_string: bool) -
     Next::Exec
 }
 
-pub fn streamunichar<G: Glk>(exec: &mut Execute<G>, val: u32, within_string: bool) -> Next {
+pub fn streamunichar<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, val: u32, within_string: bool) -> Next {
     trace::iosys(exec, "streamunichar");
     match exec.iosys.mode {
         Mode::Null => {
@@ -114,7 +114,7 @@ pub fn streamunichar<G: Glk>(exec: &mut Execute<G>, val: u32, within_string: boo
     Next::Exec
 }
 
-pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) -> Next {
+pub fn streamnum<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, val: i32, within_string: bool) -> Next {
     trace::iosys(exec, "streamnum");
     match exec.iosys.mode {
         Mode::Null => {
@@ -159,7 +159,7 @@ pub fn streamnum<G: Glk>(exec: &mut Execute<G>, val: i32, within_string: bool) -
     Next::Exec
 }
 
-pub fn streamstr<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+pub fn streamstr<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, within_string: bool) -> Next {
     trace::iosys(exec, "streamstr");
     match exec.state.mem[addr] {
         call::STRING_E0 => stream_e0(exec, addr+1, within_string),
@@ -172,7 +172,7 @@ pub fn streamstr<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool
     }
 }
 
-fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+fn stream_e0<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, within_string: bool) -> Next {
     trace::iosys(exec, "stream_e0");
     match exec.iosys.mode {
         Mode::Null => {
@@ -200,7 +200,7 @@ fn stream_e0<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
     Next::Exec
 }
 
-fn stream_e1<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+fn stream_e1<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, within_string: bool) -> Next {
     trace::iosys(exec, "stream_e1");
     if !within_string {
         call::push_stub(exec, call::RESUME_CODE, 0);
@@ -212,7 +212,7 @@ fn stream_e1<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
     Next::Ret(0)
 }
 
-fn stream_e2<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) -> Next {
+fn stream_e2<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, within_string: bool) -> Next {
     trace::iosys(exec, "stream_e2");
     match exec.iosys.mode {
         Mode::Null => {
@@ -255,7 +255,7 @@ fn stream_e2<G: Glk>(exec: &mut Execute<G>, addr: usize, within_string: bool) ->
     Next::Exec
 }
 
-pub fn resume_e0<G: Glk>(exec: &mut Execute<G>) -> Next {
+pub fn resume_e0<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>) -> Next {
     trace::iosys(exec, "resume_e0");
     let val = exec.state.mem[exec.state.pc] as u32;
     if val == 0 {
@@ -269,7 +269,7 @@ pub fn resume_e0<G: Glk>(exec: &mut Execute<G>) -> Next {
     Next::Exec
 }
 
-pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) -> Next {
+pub fn resume_e1<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, bit_index: u8) -> Next {
     trace::iosys(exec, "resume_e1");
     let mut ptr = exec.stringtbl;
     ptr = read_u32(&exec.state.mem, ptr+8) as usize;
@@ -348,7 +348,7 @@ pub fn resume_e1<G: Glk>(exec: &mut Execute<G>, bit_index: u8) -> Next {
     }
 }
 
-pub fn resume_e2<G: Glk>(exec: &mut Execute<G>) -> Next{
+pub fn resume_e2<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>) -> Next{
     trace::iosys(exec, "resume_e2");
     let val = read_u32(&exec.state.mem, exec.state.pc);
     if val == 0 {
@@ -362,7 +362,7 @@ pub fn resume_e2<G: Glk>(exec: &mut Execute<G>) -> Next{
     Next::Exec
 }
 
-pub fn resume_num<G: Glk>(exec: &mut Execute<G>, pos: usize) -> Next {
+pub fn resume_num<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, pos: usize) -> Next {
     trace::iosys(exec, "resume_num");
     let num = exec.state.pc as i32;
     let size = {
@@ -403,7 +403,7 @@ pub fn resume_num<G: Glk>(exec: &mut Execute<G>, pos: usize) -> Next {
     streamchar(exec, val, true)
 }
 
-pub fn save<G: Glk>(exec: &mut Execute<G>, outstream: u32) -> Result<()> {
+pub fn save<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, outstream: u32) -> Result<()> {
     match exec.iosys.mode {
         Mode::Null | Mode::Filter => panic!("{:x}: invalid IO System {:?} for save/restore", exec.state.pc, exec.iosys.mode),
         Mode::Glk => {
@@ -411,13 +411,14 @@ pub fn save<G: Glk>(exec: &mut Execute<G>, outstream: u32) -> Result<()> {
             if strid.is_null() {
                 Err(Error::new(ErrorKind::NotFound, "invalid stream id"))
             } else {
-                save::write(&exec.state, &mut strid)
+                let mut io_stream = exec.glk.io_stream(&mut strid);
+                save::write(&exec.state, &mut io_stream)
             }
         },
     }
 }
 
-pub fn restore<G: Glk>(exec: &mut Execute<G>, instream: u32) -> Result<()> {
+pub fn restore<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, instream: u32) -> Result<()> {
     match exec.iosys.mode {
         Mode::Null | Mode::Filter => panic!("{:x}: invalid IO System {:?} for save/restore", exec.state.pc, exec.iosys.mode),
         Mode::Glk => {
@@ -425,7 +426,8 @@ pub fn restore<G: Glk>(exec: &mut Execute<G>, instream: u32) -> Result<()> {
             if strid.is_null() {
                 Err(Error::new(ErrorKind::NotFound, "invalid stream id"))
             } else {
-                save::read(&mut exec.state, &mut strid)
+                let mut io_stream = exec.glk.io_stream(&mut strid);
+                save::read(&mut exec.state, &mut io_stream)
             }
         },
     }

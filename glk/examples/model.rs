@@ -11,7 +11,7 @@ use glk::{Glk,EventType,IdType};
 //  It shows how to input a line of text, display results, maintain a
 //  status window, write to a transcript file, and so on.
 
-pub struct Model<G: Glk> {
+pub struct Model<'a,G: Glk<'a>> {
     glk: G,
 
     // The story, status, and quote windows.
@@ -36,7 +36,7 @@ pub struct Model<G: Glk> {
     jx: usize,
 }
 
-impl<G: Glk> Model<G> {
+impl<'a,G: Glk<'a>> Model<'a,G> {
     pub fn new(glk: G) -> Self {
         Model{
             glk: glk,

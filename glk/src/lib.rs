@@ -1,15 +1,16 @@
 #![allow(non_upper_case_globals)]
 
-use std::io::{Read,Write};
+use std::io::{Read,Seek,Write};
 
-pub trait Glk {
-    type WinId: IdType;
-    type StrId: IdType + Read + Write;
-    type FRefId: IdType;
-    type SChanId: IdType;
-    type Event: EventType<Self::WinId>;
-    type TimeVal: TimeValType;
-    type Date: DateType;
+pub trait Glk<'a> {
+    type WinId: 'a+IdType;
+    type StrId: 'a+IdType;
+    type FRefId: 'a+IdType;
+    type SChanId: 'a+IdType;
+    type Event: 'a+EventType<Self::WinId>;
+    type TimeVal: 'a+TimeValType;
+    type Date: 'a+DateType;
+    type IOStream: 'a+Read+Seek+Write;
 
     fn exit(&mut self) -> !;
     fn set_interrupt_handler(&mut self, handler: extern fn());
@@ -166,7 +167,7 @@ pub trait Glk {
     fn stream_open_resource(&mut self, filenum: u32, rock: u32) -> Self::StrId;
     fn stream_open_resource_uni(&mut self, filenum: u32, rock: u32) -> Self::StrId;
 
-    fn set_resource_map(&mut self, str: Self::StrId) -> u32;
+    fn io_stream(&mut self, str: &mut Self::StrId) -> Self::IOStream;
 }
 
 pub trait IdType: Clone + Eq + std::hash::Hash {
@@ -336,11 +337,3 @@ pub const stylehint_just_LeftFlush: u32 = 0;
 pub const stylehint_just_LeftRight: u32 = 1;
 pub const stylehint_just_Centered: u32 = 2;
 pub const stylehint_just_RightFlush: u32 = 3;
-
-pub const giblorb_err_None: u32 = 0;
-pub const giblorb_err_CompileTime: u32 = 1;
-pub const giblorb_err_Alloc: u32 = 2;
-pub const giblorb_err_Read: u32 = 3;
-pub const giblorb_err_NotAMap: u32 = 4;
-pub const giblorb_err_Format: u32 = 5;
-pub const giblorb_err_NotFound: u32 = 6;

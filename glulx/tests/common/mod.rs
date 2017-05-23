@@ -21,7 +21,7 @@ fn testdata(name: &'static str) -> Result<File> {
 pub fn run_test<'a>(ulx_file: &'static str, test: Vec<(glktest::TestOutput<'a>,&'a str)>) -> Result<String> {
     let mut ulx = testdata(ulx_file)?;
     let glk = glktest::GlkTest::new(test);
-    let (glk,result) = glulx::run(glk, &mut ulx, None);
+    let (glk,result) = glulx::run(glk, &mut ulx);
     result?;
     Ok(glk.output())
 }

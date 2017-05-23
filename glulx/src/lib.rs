@@ -19,10 +19,7 @@ mod search;
 mod state;
 mod trace;
 
-pub fn run<G: Glk, R: std::io::Read>(mut glk: G, r: &mut R, resources: Option<G::StrId>) -> (G,Result<(),std::io::Error>) {
-    if let Some(res) = resources {
-        glk.set_resource_map(res);
-    }
+pub fn run<'a,G: Glk<'a>, R: std::io::Read>(glk: G, r: &mut R) -> (G,Result<(),std::io::Error>) {
     match state::State::new(r) {
         Err(cause) => (glk,Err(cause)),
         Ok(state) => {

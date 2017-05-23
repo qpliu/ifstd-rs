@@ -1,6 +1,6 @@
 extern crate glk;
 
-use std::io::{Error,ErrorKind,Read,Result,Write};
+use std::io::{Error,ErrorKind,Read,Result,Seek,SeekFrom,Write};
 
 use glk::{Glk,DateType,EventType,IdType,TimeValType};
 
@@ -54,14 +54,15 @@ impl<'a> GlkTest<'a> {
     }
 }
 
-impl<'a> Glk for GlkTest<'a> {
+impl<'a> Glk<'a> for GlkTest<'a> {
     type WinId = WinId;
-    type StrId = StrId<'a>;
+    type StrId = StrId;
     type FRefId = FRefId;
     type SChanId = SChanId;
     type Event = Event;
     type TimeVal = TimeVal;
     type Date = Date;
+    type IOStream = IOStream<'a>;
 
     fn exit(&mut self) -> ! {
         std::process::exit(0);
@@ -156,7 +157,7 @@ impl<'a> Glk for GlkTest<'a> {
         if self.root == 0 || win.0 != self.root {
             (0,0,None,None)
         } else {
-            let mut str = StrId(self.root,self);
+            let mut str = StrId(self.root);
             self.stream_close(&mut str)
         }
     }
@@ -204,14 +205,14 @@ impl<'a> Glk for GlkTest<'a> {
 
 
     fn window_get_stream(&mut self, win: &Self::WinId) -> Self::StrId {
-        StrId(win.0,self)
+        StrId(win.0)
     }
 
     fn window_set_echo_stream(&mut self, _win: &Self::WinId, _str: &Self::StrId) {
     }
 
     fn window_get_echo_stream(&mut self, _win: &Self::WinId) -> Self::StrId {
-        StrId(0,self)
+        StrId(0)
     }
 
     fn set_window(&mut self, win: &Self::WinId) {
@@ -225,7 +226,7 @@ impl<'a> Glk for GlkTest<'a> {
             contents.extend_from_slice(&data);
             contents
         } else {
-            return StrId(0,0 as *mut GlkTest);
+            return StrId(0);
         };
         let mut index = 0;
         for i in 1 .. self.streams.len() {
@@ -246,7 +247,7 @@ impl<'a> Glk for GlkTest<'a> {
                 out_uni: None,
                 file: Some((fileref.0,0,contents)),
             });
-        StrId(index,self)
+        StrId(index)
     }
 
     fn stream_open_memory(&mut self, buf: (u32,Box<[u8]>), _fmode: u32, rock: u32) -> Self::StrId {
@@ -269,7 +270,7 @@ impl<'a> Glk for GlkTest<'a> {
                 out_uni: None,
                 file: None,
             });
-        StrId(index,self)
+        StrId(index)
     }
 
     fn stream_close(&mut self, str: &mut Self::StrId) -> (u32,u32,Option<(u32,Box<[u8]>)>,Option<(u32,Box<[u32]>)>) {
@@ -289,11 +290,11 @@ impl<'a> Glk for GlkTest<'a> {
         if str.0 < self.streams.len() {
             for i in str.0 + 1 .. self.streams.len() {
                 if let &Some(TestStream{ rock, readcount:_, writecount:_ , out:_, out_uni:_, file:_ }) = &self.streams[i] {
-                    return (StrId(i,self),rock);
+                    return (StrId(i),rock);
                 }
             }
         }
-        (StrId(0,self),0)
+        (StrId(0),0)
     }
 
     fn stream_get_rock(&mut self, str: &Self::StrId) -> u32 {
@@ -321,12 +322,12 @@ impl<'a> Glk for GlkTest<'a> {
     }
 
     fn stream_get_current(&mut self) -> Self::StrId {
-        StrId(self.current,self)
+        StrId(self.current)
     }
 
 
     fn put_char(&mut self, ch: u8) {
-        let str = StrId(self.current,self);
+        let str = StrId(self.current);
         self.put_char_stream(&str, ch);
     }
 
@@ -589,7 +590,7 @@ impl<'a> Glk for GlkTest<'a> {
 
 
     fn put_char_uni(&mut self, ch: u32) {
-        let str = StrId(self.current,self);
+        let str = StrId(self.current);
         self.put_char_stream_uni(&str, ch);
     }
 
@@ -653,7 +654,7 @@ impl<'a> Glk for GlkTest<'a> {
 
 
     fn stream_open_file_uni(&mut self, _fileref: &Self::FRefId, _fmode: u32, _rock: u32) -> Self::StrId {
-        StrId(0,self)
+        StrId(0)
     }
 
     fn stream_open_memory_uni(&mut self, buf: (u32,Box<[u32]>), _fmode: u32, rock: u32) -> Self::StrId {
@@ -676,7 +677,7 @@ impl<'a> Glk for GlkTest<'a> {
                 out_uni: Some(buf),
                 file: None,
             });
-        StrId(index,self)
+        StrId(index)
     }
 
 
@@ -832,16 +833,16 @@ impl<'a> Glk for GlkTest<'a> {
 
 
     fn stream_open_resource(&mut self, _filenum: u32, _rock: u32) -> Self::StrId {
-        StrId(0,self)
+        StrId(0)
     }
 
     fn stream_open_resource_uni(&mut self, _filenum: u32, _rock: u32) -> Self::StrId {
-        StrId(0,self)
+        StrId(0)
     }
 
 
-    fn set_resource_map(&mut self, _str: Self::StrId) -> u32 {
-        0
+    fn io_stream(&mut self, str: &mut Self::StrId) -> Self::IOStream {
+        IOStream(str.0,self)
     }
 }
 
@@ -859,11 +860,11 @@ impl IdType for WinId {
 }
 
 #[derive(Clone,Eq,Hash,PartialEq)]
-pub struct StrId<'a>(usize,*mut GlkTest<'a>);
+pub struct StrId(usize);
 
-impl<'a> IdType for StrId<'a> {
+impl IdType for StrId {
     fn null() -> Self {
-        StrId(0, 0 as *mut GlkTest)
+        StrId(0)
     }
 
     fn is_null(&self) -> bool {
@@ -871,7 +872,9 @@ impl<'a> IdType for StrId<'a> {
     }
 }
 
-impl<'a> Read for StrId<'a> {
+pub struct IOStream<'a>(usize,*mut GlkTest<'a>);
+
+impl<'a> Read for IOStream<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         if let Some(mut glk) = unsafe { self.1.as_mut() } {
             if let Some(&mut Some(ref mut test_stream)) = glk.streams.get_mut(self.0) {
@@ -889,7 +892,7 @@ impl<'a> Read for StrId<'a> {
     }
 }
 
-impl<'a> Write for StrId<'a> {
+impl<'a> Write for IOStream<'a> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         if let Some(mut glk) = unsafe { self.1.as_mut() } {
             if let Some(&mut Some(ref mut test_stream)) = glk.streams.get_mut(self.0) {
@@ -904,6 +907,12 @@ impl<'a> Write for StrId<'a> {
 
     fn flush(&mut self) -> Result<()> {
         Ok(())
+    }
+}
+
+impl<'a> Seek for IOStream<'a> {
+    fn seek(&mut self, _pos: SeekFrom) -> Result<u64> {
+        unimplemented!()
     }
 }
 

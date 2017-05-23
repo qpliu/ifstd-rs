@@ -26,7 +26,7 @@ pub const LOCAL_8: u8 = 1;
 pub const LOCAL_16: u8 = 2;
 pub const LOCAL_32: u8 = 4;
 
-pub fn call<G: Glk>(exec: &mut Execute<G>, addr: usize, dest_type: u32, dest_addr: u32) {
+pub fn call<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, dest_type: u32, dest_addr: u32) {
     match accel::call(exec, addr) {
         Some(val) => {
             store_ret_result(exec, val, dest_type, dest_addr as usize);
@@ -38,7 +38,7 @@ pub fn call<G: Glk>(exec: &mut Execute<G>, addr: usize, dest_type: u32, dest_add
     }
 }
 
-pub fn tailcall<G: Glk>(exec: &mut Execute<G>, addr: usize) -> Next {
+pub fn tailcall<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize) -> Next {
     match accel::call(exec, addr) {
         Some(val) => {
             Next::Ret(val)
@@ -50,7 +50,7 @@ pub fn tailcall<G: Glk>(exec: &mut Execute<G>, addr: usize) -> Next {
     }
 }
 
-pub fn push_stub<G: Glk>(exec: &mut Execute<G>, dest_type: u32, dest_addr: u32) {
+pub fn push_stub<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, dest_type: u32, dest_addr: u32) {
     exec.state.stack.push(dest_type);
     exec.state.stack.push(dest_addr);
     exec.state.stack.push(exec.state.pc as u32);
@@ -58,7 +58,7 @@ pub fn push_stub<G: Glk>(exec: &mut Execute<G>, dest_type: u32, dest_addr: u32) 
     trace::push_call_stub(exec);
 }
 
-pub fn call_func<G: Glk>(exec: &mut Execute<G>, addr: usize) {
+pub fn call_func<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize) {
     let func_type = exec.state.mem[addr];
     exec.state.pc = addr + 1;
     let locals_format = exec.state.pc;
@@ -163,7 +163,7 @@ pub fn call_func<G: Glk>(exec: &mut Execute<G>, addr: usize) {
     }
 }
 
-pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> Next {
+pub fn ret<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, val: u32) -> Next {
     {
         let frame_ptr = exec.state.frame_ptr;
         exec.state.stack.truncate(frame_ptr);
@@ -188,7 +188,7 @@ pub fn ret<G: Glk>(exec: &mut Execute<G>, val: u32) -> Next {
     store_ret_result(exec, val, dest_type, dest_addr)
 }
 
-pub fn store_ret_result<G: Glk>(exec: &mut Execute<G>, val: u32, dest_type: u32, dest_addr: usize) -> Next {
+pub fn store_ret_result<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, val: u32, dest_type: u32, dest_addr: usize) -> Next {
     match dest_type {
         DISCARD => (),
         MEM => write_u32(&mut exec.state.mem, dest_addr, val),

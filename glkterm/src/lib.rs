@@ -1,7 +1,7 @@
 extern crate glk;
 
 use std::ffi::CString;
-use std::io::{Error,ErrorKind,Read,Result,Write};
+use std::io::{Error,ErrorKind,Read,Result,Seek,SeekFrom,Write};
 use std::os::raw::{c_char,c_uchar};
 
 use glk::{Glk,DateType,EventType,IdType,TimeValType};
@@ -34,7 +34,7 @@ fn main_func(main_func: fn(GlkTerm,Vec<String>), args: Vec<String>) {
 pub struct GlkTerm {
 }
 
-impl Glk for GlkTerm {
+impl<'a> Glk<'a> for GlkTerm {
     type WinId = WinId;
     type StrId = StrId;
     type FRefId = FRefId;
@@ -42,6 +42,7 @@ impl Glk for GlkTerm {
     type Event = Event;
     type TimeVal = TimeVal;
     type Date = Date;
+    type IOStream = IOStream;
 
     fn exit(&mut self) -> ! {
         unsafe {
@@ -882,10 +883,8 @@ impl Glk for GlkTerm {
     }
 
 
-    fn set_resource_map(&mut self, str: Self::StrId) -> u32 {
-        unsafe {
-            c_interface::giblorb_set_resource_map(str.ptr)
-        }
+    fn io_stream(&mut self, str: &mut Self::StrId) -> Self::IOStream {
+        IOStream(str.ptr)
     }
 }
 
@@ -919,31 +918,47 @@ impl IdType for StrId {
     }
 }
 
-impl Read for StrId {
+pub struct IOStream(c_interface::strid_t);
+
+impl Read for IOStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        if self.is_null() {
+        if self.0.is_null() {
             return Err(Error::new(ErrorKind::NotConnected, "null stream"))
         }
         let count = unsafe {
-            c_interface::glk_get_buffer_stream(self.ptr, buf.as_mut_ptr() as *mut c_char, buf.len() as u32)
+            c_interface::glk_get_buffer_stream(self.0, buf.as_mut_ptr() as *mut c_char, buf.len() as u32)
         };
         Ok(count as usize)
     }
 }
 
-impl Write for StrId {
+impl Write for IOStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        if self.is_null() {
+        if self.0.is_null() {
             return Err(Error::new(ErrorKind::NotConnected, "null stream"))
         }
         unsafe {
-            c_interface::glk_put_buffer_stream(self.ptr, buf.as_ptr() as *const c_char, buf.len() as u32);
+            c_interface::glk_put_buffer_stream(self.0, buf.as_ptr() as *const c_char, buf.len() as u32);
         }
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> Result<()> {
         Ok(())
+    }
+}
+ 
+impl Seek for IOStream {
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        let (p,seekmode) = match pos {
+            SeekFrom::Start(p) => (p as i32,glk::seekmode_Start),
+            SeekFrom::End(p) => (p as i32,glk::seekmode_End),
+            SeekFrom::Current(p) => (p as i32,glk::seekmode_Current),
+        };
+        unsafe {
+            c_interface::glk_stream_set_position(self.0, p, seekmode);
+            Ok(c_interface::glk_stream_get_position(self.0) as u64)
+        }
     }
 }
 
