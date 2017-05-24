@@ -12,6 +12,8 @@ pub enum Next {
     Ret(u32),
 }
 
+const MAX_UNDO_DEPTH: usize = 2;
+
 pub struct Execute<'a,G: Glk<'a>> {
     pub state: State,
 
@@ -501,7 +503,11 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
                     }
                 }
                 if result != 0 {
-                    let mut undo_state = state::UndoState::new();
+                    let mut undo_state = if self.undo_state.len() < MAX_UNDO_DEPTH {
+                        state::UndoState::new()
+                    } else {
+                        self.undo_state.remove(0)
+                    };
                     if undo_state.save(&self.state, s1) {
                         self.undo_state.push(undo_state);
                         result = 0;
