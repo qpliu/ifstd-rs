@@ -48,6 +48,8 @@ mod internal {
     pub struct Trace {
         out: Option<File>,
         start: Instant,
+        count: u64,
+        skip: u64,
     }
 
     impl Trace {
@@ -61,7 +63,12 @@ mod internal {
             } else {
                 None
             };
-            Trace{ out, start: Instant::now() }
+            let skip = if let Ok(skip) = env::var("GLULX_TRACE_SKIP") {
+                skip.parse().unwrap_or(0)
+            } else {
+                0
+            };
+            Trace{ out, start: Instant::now(), count: 0, skip }
         }
     }
 
@@ -71,14 +78,26 @@ mod internal {
     }
 
     pub fn opcode<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, opcode: u32) {
-        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
+        if let &mut Trace{out: Some(ref mut out), start, ref mut count, skip} = &mut exec.trace {
+            *count += 1;
+            if *count >= skip {
+                *count = 0;
+            } else {
+                return;
+            }
             timestamp(out, start);
             out.write(format!("{:06x}:{:03x} {:10.10}", addr, opcode, opcode_name(opcode)).as_bytes()).unwrap();
         }
     }
 
     pub fn iosys<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, op: &'static str) {
-        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
+        if let &mut Trace{out: Some(ref mut out), start, ref mut count, skip} = &mut exec.trace {
+            *count += 1;
+            if *count >= skip {
+                *count = 0;
+            } else {
+                return;
+            }
             timestamp(out, start);
             out.write(format!("{:06x}: {:10.10} Fr:{:x}/{:x}\n", exec.state.pc, op, exec.state.frame_ptr, exec.state.stack.len()).as_bytes()).unwrap();
 
@@ -86,6 +105,9 @@ mod internal {
     }
 
     pub fn operand<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, mode: &Mode, val: Option<u32>) {
+        if exec.trace.count != 0 {
+            return;
+        }
         if let &mut Some(ref mut out) = &mut exec.trace.out {
             out.write(format!(" {:?}", mode).as_bytes()).unwrap();
             if let Some(v) = val {
@@ -95,6 +117,9 @@ mod internal {
     }
 
     pub fn frame<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>) {
+        if exec.trace.count != 0 {
+            return;
+        }
         if let &mut Some(ref mut out) = &mut exec.trace.out {
             out.write(format!(" === Fr:{:x}:{:x}:{:x} [", exec.state.frame_ptr, exec.frame_locals, exec.frame_end).as_bytes()).unwrap();
             for i in exec.frame_locals .. exec.frame_end {
@@ -109,7 +134,13 @@ mod internal {
     }
 
     pub fn push_call_stub<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>) {
-        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
+        if let &mut Trace{out: Some(ref mut out), start, ref mut count, skip} = &mut exec.trace {
+            *count += 1;
+            if *count >= skip {
+                *count = 0;
+            } else {
+                return;
+            }
             timestamp(out, start);
             if exec.state.stack.len() < 4 {
                 return;
@@ -121,7 +152,13 @@ mod internal {
     }
 
     pub fn call_stub<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>) {
-        if let &mut Trace{out: Some(ref mut out), start} = &mut exec.trace {
+        if let &mut Trace{out: Some(ref mut out), start, ref mut count, skip} = &mut exec.trace {
+            *count += 1;
+            if *count >= skip {
+                *count = 0;
+            } else {
+                return;
+            }
             if exec.state.stack.len() < 4 {
                 return;
             }

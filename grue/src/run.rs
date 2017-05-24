@@ -1,7 +1,7 @@
 use std;
 use super::{glk,glulx,iff};
 
-pub fn grue<G: glk::Glk>(glk: G, args: Vec<String>) -> std::io::Result<()> {
+pub fn grue<'a,G: glk::Glk<'a>>(glk: G, args: Vec<String>) -> std::io::Result<()> {
     if args.len() < 2 {
         return Ok(());
     }
@@ -11,7 +11,7 @@ pub fn grue<G: glk::Glk>(glk: G, args: Vec<String>) -> std::io::Result<()> {
     file.read(&mut buf)?;
     if buf[..] == b"Glul"[..] {
         file.seek(std::io::SeekFrom::Current(-4))?;
-        glulx::run(glk, &mut file, None);
+        glulx::run(glk, &mut file);
     } else if buf[..] == b"FORM"[..] {
         file.read_to_end(&mut buf)?;
         if let iff::Chunk::Envelope { envelope_id:_, id, chunks } = iff::Chunk::new(&buf)? {
@@ -19,7 +19,7 @@ pub fn grue<G: glk::Glk>(glk: G, args: Vec<String>) -> std::io::Result<()> {
                 for chunk in chunks {
                     if let iff::Chunk::Data { id, mut data } = chunk {
                         if id == From::from(b"GLUL") {
-                            glulx::run(glk, &mut data, None);
+                            glulx::run(glk, &mut data);
                             break;
                         }
                     }

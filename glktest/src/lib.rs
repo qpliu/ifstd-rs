@@ -15,7 +15,9 @@ struct TestStream {
     writecount: u32,
     out: Option<(u32,Box<[u8]>)>,
     out_uni: Option<(u32,Box<[u32]>)>,
-    file: Option<(usize,usize,Vec<u8>)>,
+    file: Option<(usize,Vec<u8>)>,
+    pos: usize,
+    end: usize,
 }
 
 struct TestFile {
@@ -146,6 +148,8 @@ impl<'a> Glk<'a> for GlkTest<'a> {
                     out: None,
                     out_uni: None,
                     file: None,
+                    pos: 0,
+                    end: 0,
                 });
             self.root = index;
             self.rock = rock;
@@ -220,7 +224,7 @@ impl<'a> Glk<'a> for GlkTest<'a> {
     }
 
 
-    fn stream_open_file(&mut self, fileref: &Self::FRefId, _fmode: u32, rock: u32) -> Self::StrId {
+    fn stream_open_file(&mut self, fileref: &Self::FRefId, fmode: u32, rock: u32) -> Self::StrId {
         let contents = if let Some(&Some(TestFile{ rock:_, ref data })) = self.files.get(fileref.0) {
             let mut contents = vec![];
             contents.extend_from_slice(&data);
@@ -239,18 +243,21 @@ impl<'a> Glk<'a> for GlkTest<'a> {
             index = self.streams.len();
             self.streams.push(None);
         }
+        let end = if fmode == glk::filemode_Write { 0 } else { contents.len() };
         self.streams[index] = Some(TestStream{
                 rock: rock,
                 readcount: 0,
                 writecount: 0,
                 out: None,
                 out_uni: None,
-                file: Some((fileref.0,0,contents)),
+                file: Some((fileref.0,contents)),
+                pos: 0,
+                end: end,
             });
         StrId(index)
     }
 
-    fn stream_open_memory(&mut self, buf: (u32,Box<[u8]>), _fmode: u32, rock: u32) -> Self::StrId {
+    fn stream_open_memory(&mut self, buf: (u32,Box<[u8]>), fmode: u32, rock: u32) -> Self::StrId {
         let mut index = 0;
         for i in 1 .. self.streams.len() {
             if self.streams[i].is_none() {
@@ -262,6 +269,7 @@ impl<'a> Glk<'a> for GlkTest<'a> {
             index = self.streams.len();
             self.streams.push(None);
         }
+        let end = if fmode == glk::filemode_Write { 0 } else { buf.1.len() };
         self.streams[index] = Some(TestStream{
                 rock: rock,
                 readcount: 0,
@@ -269,6 +277,8 @@ impl<'a> Glk<'a> for GlkTest<'a> {
                 out: Some(buf),
                 out_uni: None,
                 file: None,
+                pos: 0,
+                end: end,
             });
         StrId(index)
     }
@@ -278,7 +288,7 @@ impl<'a> Glk<'a> for GlkTest<'a> {
             return (0,0,None,None);
         }
         let stream = self.streams[str.0].take().unwrap();
-        if let Some((fref,_,stream_data)) = stream.file {
+        if let Some((fref,stream_data)) = stream.file {
             if let Some(&mut Some(TestFile{ rock:_, ref mut data })) = self.files.get_mut(fref) {
                 *data = stream_data.into_boxed_slice();
             }
@@ -289,7 +299,7 @@ impl<'a> Glk<'a> for GlkTest<'a> {
     fn stream_iterate(&mut self, str: &Self::StrId) -> (Self::StrId,u32) {
         if str.0 < self.streams.len() {
             for i in str.0 + 1 .. self.streams.len() {
-                if let &Some(TestStream{ rock, readcount:_, writecount:_ , out:_, out_uni:_, file:_ }) = &self.streams[i] {
+                if let &Some(TestStream{ rock, readcount:_, writecount:_ , out:_, out_uni:_, file:_, pos:_, end:_ }) = &self.streams[i] {
                     return (StrId(i),rock);
                 }
             }
@@ -298,20 +308,36 @@ impl<'a> Glk<'a> for GlkTest<'a> {
     }
 
     fn stream_get_rock(&mut self, str: &Self::StrId) -> u32 {
-        if let Some(&Some(TestStream{ rock, readcount:_, writecount:_ , out:_, out_uni:_, file:_ })) = self.streams.get(str.0) {
+        if let Some(&Some(TestStream{ rock, readcount:_, writecount:_ , out:_, out_uni:_, file:_, pos:_, end:_ })) = self.streams.get(str.0) {
             rock
         } else {
             0
         }
     }
 
-    fn stream_set_position(&mut self, _str: &Self::StrId, _pos: i32, _seekmode: u32) {
-        panic!();
+    fn stream_set_position(&mut self, str: &Self::StrId, pos: i32, seekmode: u32) {
+        if let Some(&mut Some(TestStream{ rock:_, readcount:_, writecount:_, out:_, out_uni:_, file:_, pos:ref mut stream_pos, end })) = self.streams.get_mut(str.0) {
+            match seekmode {
+                glk::seekmode_Start => {
+                    *stream_pos = pos as usize;
+                },
+                glk::seekmode_End => {
+                    if (-pos) as usize <= end {
+                        *stream_pos = end - (-pos) as usize;
+                    }
+                },
+                glk::seekmode_Current => {
+                    *stream_pos = (*stream_pos as isize + pos as isize) as usize;
+                },
+                _ => {
+                },
+            }
+        }
     }
 
     fn stream_get_position(&mut self, str: &Self::StrId) -> u32 {
-        if let Some(&Some(TestStream{ rock:_, readcount:_, writecount, out:_, out_uni:_, file:_ })) = self.streams.get(str.0) {
-            writecount
+        if let Some(&Some(TestStream{ rock:_, readcount:_, writecount:_, out:_, out_uni:_, file:_, pos, end:_ })) = self.streams.get(str.0) {
+            pos as u32
         } else {
             0
         }
@@ -332,20 +358,29 @@ impl<'a> Glk<'a> for GlkTest<'a> {
     }
 
     fn put_char_stream(&mut self, str: &Self::StrId, ch: u8) {
-        if let Some(&mut Some(TestStream{ rock:_, readcount:_, ref mut writecount, ref mut out, ref mut out_uni, ref mut file })) = self.streams.get_mut(str.0) {
-            if self.current == self.root {
+        if let Some(&mut Some(TestStream{ rock:_, readcount:_, ref mut writecount, ref mut out, ref mut out_uni, ref mut file, ref mut pos, ref mut end })) = self.streams.get_mut(str.0) {
+            if str.0 == self.root {
                 self.out.push(ch as char);
             } else if let &mut Some((_,ref mut mem)) = out {
-                if *writecount < mem.len() as u32 {
-                    mem[*writecount as usize] = ch;
+                if *pos < mem.len() {
+                    mem[*pos] = ch;
+                    *pos += 1;
                 }
             } else if let &mut Some((_,ref mut mem)) = out_uni {
-                if *writecount < mem.len() as u32 {
-                    mem[*writecount as usize] = ch as u32;
+                if *pos < mem.len() {
+                    mem[*pos as usize] = ch as u32;
+                    *pos += 1;
                 }
-            } else if let &mut Some((_,_,ref mut data)) = file {
-                data.push(ch);
+            } else if let &mut Some((_,ref mut data)) = file {
+                if *pos >= data.len() {
+                    data.push(ch);
+                    *pos = data.len();
+                } else {
+                    data[*pos] = ch;
+                    *pos += 1;
+                }
             }
+            *end = std::cmp::max(*end, *pos);
             *writecount += 1;
         }
     }
@@ -381,16 +416,65 @@ impl<'a> Glk<'a> for GlkTest<'a> {
     }
 
 
-    fn get_char_stream(&mut self, _str: &Self::StrId) -> i32 {
-        panic!()
+    fn get_char_stream(&mut self, str: &Self::StrId) -> i32 {
+        if let Some(&mut Some(TestStream{ rock:_, ref mut readcount, writecount:_, ref out, ref out_uni, ref file, ref mut pos, end:_ })) = self.streams.get_mut(str.0) {
+            if str.0 == self.root {
+                panic!();
+            } else if let &Some((_,ref mem)) = out {
+                if *pos < mem.len() {
+                    let ch = mem[*pos];
+                    *pos += 1;
+                    *readcount += 1;
+                    ch as i32
+                } else {
+                    -1
+                }
+            } else if let &Some((_,ref mem)) = out_uni {
+                if *pos < mem.len() {
+                    let ch = mem[*pos as usize] as u8;
+                    *pos += 1;
+                    *readcount += 1;
+                    ch as i32
+                } else {
+                    -1
+                }
+            } else if let &Some((_,ref data)) = file {
+                if *pos < data.len() {
+                    let ch = data[*pos];
+                    *pos += 1;
+                    *readcount += 1;
+                    ch as i32
+                } else {
+                    -1
+                }
+            } else {
+                -1
+            }
+        } else {
+            -1
+        }
     }
 
-    fn get_line_stream(&mut self, _str: &Self::StrId, _buf: &mut [u8]) -> u32 {
-        panic!()
+    fn get_line_stream(&mut self, str: &Self::StrId, buf: &mut [u8]) -> u32 {
+        for i in 0 .. buf.len() {
+            let ch = self.get_char_stream(str);
+            if ch == -1 || ch == 0xa {
+                return i as u32;
+            }
+            buf[i] = ch as u8;
+        }
+        buf.len() as u32
     }
 
-    fn get_buffer_stream(&mut self, _str: &Self::StrId, _buf: &mut [u8]) -> u32 {
-        panic!()
+    fn get_buffer_stream(&mut self, str: &Self::StrId, buf: &mut [u8]) -> u32 {
+        for i in 0 .. buf.len() {
+            let ch = self.get_char_stream(str);
+            if ch == -1 {
+                return i as u32;
+            }
+            buf[i] = ch as u8;
+        }
+        buf.len() as u32
     }
 
 
@@ -607,22 +691,31 @@ impl<'a> Glk<'a> for GlkTest<'a> {
     }
 
     fn put_char_stream_uni(&mut self, str: &Self::StrId, ch: u32) {
-        if let Some(&mut Some(TestStream{ rock:_, readcount:_, ref mut writecount, ref mut out, ref mut out_uni, ref mut file })) = self.streams.get_mut(str.0) {
-            if self.current == self.root {
+        if let Some(&mut Some(TestStream{ rock:_, readcount:_, ref mut writecount, ref mut out, ref mut out_uni, ref mut file, ref mut pos, ref mut end })) = self.streams.get_mut(str.0) {
+            if str.0 == self.root {
                 if let Some(c) = std::char::from_u32(ch) {
                     self.out.push(c);
                 }
             } else if let &mut Some((_,ref mut mem)) = out {
-                if *writecount < mem.len() as u32 {
-                    mem[*writecount as usize] = ch as u8;
+                if *pos < mem.len() {
+                    mem[*pos] = ch as u8;
+                    *pos += 1;
                 }
             } else if let &mut Some((_,ref mut mem)) = out_uni {
-                if *writecount < mem.len() as u32 {
-                    mem[*writecount as usize] = ch;
+                if *pos < mem.len() {
+                    mem[*pos] = ch;
+                    *pos += 1;
                 }
-            } else if let &mut Some((_,_,ref mut data)) = file {
-                data.push(ch as u8);
+            } else if let &mut Some((_,ref mut data)) = file {
+                if *pos >= data.len() {
+                    data.push(ch as u8);
+                    *pos = data.len();
+                } else {
+                    data[*pos] = ch as u8;
+                    *pos += 1;
+                }
             }
+            *end = std::cmp::max(*end, *pos);
             *writecount += 1;
         }
     }
@@ -640,16 +733,65 @@ impl<'a> Glk<'a> for GlkTest<'a> {
     }
 
 
-    fn get_char_stream_uni(&mut self, _str: &Self::StrId) -> i32 {
-        panic!()
+    fn get_char_stream_uni(&mut self, str: &Self::StrId) -> i32 {
+        if let Some(&mut Some(TestStream{ rock:_, ref mut readcount, writecount:_, ref out, ref out_uni, ref file, ref mut pos, end:_ })) = self.streams.get_mut(str.0) {
+            if str.0 == self.root {
+                panic!();
+            } else if let &Some((_,ref mem)) = out {
+                if *pos < mem.len() {
+                    let ch = mem[*pos];
+                    *pos += 1;
+                    *readcount += 1;
+                    ch as i32
+                } else {
+                    -1
+                }
+            } else if let &Some((_,ref mem)) = out_uni {
+                if *pos < mem.len() {
+                    let ch = mem[*pos as usize] as u8;
+                    *pos += 1;
+                    *readcount += 1;
+                    ch as i32
+                } else {
+                    -1
+                }
+            } else if let &Some((_,ref data)) = file {
+                if *pos < data.len() {
+                    let ch = data[*pos];
+                    *pos += 1;
+                    *readcount += 1;
+                    ch as i32
+                } else {
+                    -1
+                }
+            } else {
+                -1
+            }
+        } else {
+            -1
+        }
     }
 
-    fn get_buffer_stream_uni(&mut self, _str: &Self::StrId, _buf: &mut [u32]) -> u32 {
-        panic!()
+    fn get_buffer_stream_uni(&mut self, str: &Self::StrId, buf: &mut [u32]) -> u32 {
+        for i in 0 .. buf.len() {
+            let ch = self.get_char_stream_uni(str);
+            if ch == -1 {
+                return i as u32;
+            }
+            buf[i] = ch as u32;
+        }
+        buf.len() as u32
     }
 
-    fn get_line_stream_uni(&mut self, _str: &Self::StrId, _buf: &mut [u32]) -> u32 {
-        panic!()
+    fn get_line_stream_uni(&mut self, str: &Self::StrId, buf: &mut [u32]) -> u32 {
+        for i in 0 .. buf.len() {
+            let ch = self.get_char_stream_uni(str);
+            if ch == -1 || ch == 0xa {
+                return i as u32;
+            }
+            buf[i] = ch as u32;
+        }
+        buf.len() as u32
     }
 
 
@@ -657,7 +799,7 @@ impl<'a> Glk<'a> for GlkTest<'a> {
         StrId(0)
     }
 
-    fn stream_open_memory_uni(&mut self, buf: (u32,Box<[u32]>), _fmode: u32, rock: u32) -> Self::StrId {
+    fn stream_open_memory_uni(&mut self, buf: (u32,Box<[u32]>), fmode: u32, rock: u32) -> Self::StrId {
         let mut index = 0;
         for i in 1 .. self.streams.len() {
             if self.streams[i].is_none() {
@@ -669,6 +811,7 @@ impl<'a> Glk<'a> for GlkTest<'a> {
             index = self.streams.len();
             self.streams.push(None);
         }
+        let end = if fmode == glk::filemode_Write { 0 } else { buf.1.len() };
         self.streams[index] = Some(TestStream{
                 rock: rock,
                 readcount: 0,
@@ -676,6 +819,8 @@ impl<'a> Glk<'a> for GlkTest<'a> {
                 out: None,
                 out_uni: Some(buf),
                 file: None,
+                pos: 0,
+                end: end,
             });
         StrId(index)
     }
@@ -842,7 +987,7 @@ impl<'a> Glk<'a> for GlkTest<'a> {
 
 
     fn io_stream(&mut self, str: &mut Self::StrId) -> Self::IOStream {
-        IOStream(str.0,self)
+        IOStream(str.clone(),self)
     }
 }
 
@@ -872,37 +1017,27 @@ impl IdType for StrId {
     }
 }
 
-pub struct IOStream<'a>(usize,*mut GlkTest<'a>);
+pub struct IOStream<'a>(StrId,*mut GlkTest<'a>);
 
 impl<'a> Read for IOStream<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         if let Some(mut glk) = unsafe { self.1.as_mut() } {
-            if let Some(&mut Some(ref mut test_stream)) = glk.streams.get_mut(self.0) {
-                if let &mut Some((_,ref mut read_index,ref mut data)) = &mut test_stream.file {
-                    let len = std::cmp::min(buf.len(), data.len() - *read_index);
-                    for i in 0 .. len {
-                        buf[i] = data[*read_index + i];
-                    }
-                    *read_index += len;
-                    return Ok(len);
-                }
-            }
+            let count = glk.get_buffer_stream(&self.0, buf);
+            Ok(count as usize)
+        } else {
+            Err(Error::new(ErrorKind::NotConnected, "not implemented"))
         }
-        Err(Error::new(ErrorKind::NotConnected, "not implemented"))
     }
 }
 
 impl<'a> Write for IOStream<'a> {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
         if let Some(mut glk) = unsafe { self.1.as_mut() } {
-            if let Some(&mut Some(ref mut test_stream)) = glk.streams.get_mut(self.0) {
-                if let &mut Some((_,_,ref mut data)) = &mut test_stream.file {
-                    data.extend_from_slice(buf);
-                    return Ok(buf.len());
-                }
-            }
+            glk.put_buffer_stream(&self.0, buf);
+            Ok(buf.len())
+        } else {
+            Err(Error::new(ErrorKind::NotConnected, "not implemented"))
         }
-        return Err(Error::new(ErrorKind::NotConnected, "not implemented"))
     }
 
     fn flush(&mut self) -> Result<()> {
@@ -911,8 +1046,18 @@ impl<'a> Write for IOStream<'a> {
 }
 
 impl<'a> Seek for IOStream<'a> {
-    fn seek(&mut self, _pos: SeekFrom) -> Result<u64> {
-        unimplemented!()
+    fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
+        if let Some(mut glk) = unsafe { self.1.as_mut() } {
+            let (pos,seekmode) = match pos {
+                SeekFrom::Start(pos) => (pos as i32,glk::seekmode_Start),
+                SeekFrom::End(pos) => (pos as i32,glk::seekmode_End),
+                SeekFrom::Current(pos) => (pos as i32,glk::seekmode_Current),
+            };
+            glk.stream_set_position(&self.0, pos, seekmode);
+            Ok(glk.stream_get_position(&self.0) as u64)
+        } else {
+            Err(Error::new(ErrorKind::NotConnected, "not implemented"))
+        }
     }
 }
 

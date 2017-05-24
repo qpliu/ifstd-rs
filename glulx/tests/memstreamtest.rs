@@ -43,10 +43,10 @@ fn test() {
 fn pos() {
     assert!(common::run_test("memstreamtest.ulx", vec![
                 (Match(INTRO), "pos"),
-                (Match(""), "unipos"),
-                (Match(""), "read"),
-                (Match(""), "uniread"),
-                (Match(""), "quit"),
+                (Match("(Sent to char stream: 61 chars)\nThis line was assembled piecewise.\n\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\nCharacter by character:  T h i s   l i n e   w a s   a s s e m b l e d   p i e c e w i s e . (newline)\n\n>"), "unipos"),
+                (Match("(Sent to unicode char stream: 61 chars)\nThis line was assembled piecewise.\n\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\nCharacter by character:  T h i s   l i n e   w a s   a s s e m b l e d   p i e c e w i s e . (newline)\n\n>"), "read"),
+                (Match("Read char \'!\'\nRead line of 9 chars: Line one.Read buffer of 13 chars: Line two.\n...\nRead buffer of 11 chars: Last line.\n\nRead char -1\nRead line of 0 chars\n(Read from char stream: 35 chars)\n\n>"), "uniread"),
+                (Match("Read char \'!\'\nRead line of 9 chars: Li·e one.Read buffer of 13 chars: Li·e two.\n...\nRead buffer of 11 chars: Last li·e.\n\nRead char -1\nRead line of 0 chars\n(Read from unicode char stream: 35 chars)\n\n>"), "quit"),
                 (Match("Are you sure you want to quit? "), "y"),
                 ]).is_ok());
 }
@@ -55,8 +55,8 @@ fn pos() {
 fn read() {
     assert!(common::run_test("memstreamtest.ulx", vec![
                 (Match(INTRO), "read"),
-                (Match(""), "uniread"),
-                (Match(""), "quit"),
+                (Match("Read char \'!\'\nRead line of 9 chars: Line one.Read buffer of 13 chars: Line two.\n...\nRead buffer of 11 chars: Last line.\n\nRead char -1\nRead line of 0 chars\n(Read from char stream: 35 chars)\n\n>"), "uniread"),
+                (Match("Read char \'!\'\nRead line of 9 chars: Li·e one.Read buffer of 13 chars: Li·e two.\n...\nRead buffer of 11 chars: Last li·e.\n\nRead char -1\nRead line of 0 chars\n(Read from unicode char stream: 35 chars)\n\n>"), "quit"),
                 (Match("Are you sure you want to quit? "), "y"),
                 ]).is_ok());
 }
