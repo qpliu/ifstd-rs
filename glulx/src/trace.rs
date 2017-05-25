@@ -18,7 +18,7 @@ mod internal {
     pub fn opcode<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>, _addr: usize, _opcode: u32) {
     }
 
-    pub fn iosys<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, op: &'static str) {
+    pub fn iosys<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>, _op: &'static str) {
     }
 
     pub fn operand<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>, _mode: &Mode, _val: Option<u32>) {

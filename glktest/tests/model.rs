@@ -26,7 +26,7 @@ fn main() {
                 ])).glk_main();
 }
 
-pub struct Model<G: Glk> {
+pub struct Model<'a,G: Glk<'a>> {
     glk: G,
 
     // The story, status, and quote windows.
@@ -51,7 +51,7 @@ pub struct Model<G: Glk> {
     jx: usize,
 }
 
-impl<G: Glk> Model<G> {
+impl<'a,G: Glk<'a>> Model<'a,G> {
     pub fn new(glk: G) -> Self {
         Model{
             glk: glk,
