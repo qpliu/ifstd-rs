@@ -15,21 +15,27 @@ mod internal {
         }
     }
 
+    #[inline]
     pub fn opcode<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>, _addr: usize, _opcode: u32) {
     }
 
+    #[inline]
     pub fn iosys<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>, _op: &'static str) {
     }
 
+    #[inline]
     pub fn operand<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>, _mode: &Mode, _val: Option<u32>) {
     }
 
+    #[inline]
     pub fn frame<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>) {
     }
 
+    #[inline]
     pub fn push_call_stub<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>) {
     }
 
+    #[inline]
     pub fn call_stub<'a,G: Glk<'a>>(_exec: &mut Execute<'a,G>) {
     }
 }
