@@ -32,6 +32,7 @@ pub struct GlkTest<'a> {
     streams: Vec<Option<TestStream>>,
     out: String,
     line_input: Option<(u32,Box<[u8]>)>,
+    char_input: bool,
     files: Vec<Option<TestFile>>,
 
     test: Vec<(TestOutput<'a>,&'a str)>,
@@ -46,6 +47,7 @@ impl<'a> GlkTest<'a> {
             streams: vec![None],
             out: String::new(),
             line_input: None,
+            char_input: false,
             files: vec![None],
             test: test,
         }
@@ -562,19 +564,24 @@ impl<'a> Glk<'a> for GlkTest<'a> {
 
 
     fn select(&mut self) -> Self::Event {
-        if self.line_input.is_none() {
-            Event::None
+        if self.line_input.is_none() && !self.char_input {
+            return Event::None;
+        }
+        let (test,line) = self.test.remove(0);
+        match test {
+            TestOutput::Match(expected) => {
+                assert_eq!(expected, self.out.as_str());
+            },
+            TestOutput::Check(f) => {
+                assert!(f(&self.out));
+            },
+        }
+        self.out.clear();
+        if self.char_input {
+            assert_eq!(line.len(), 1);
+            self.char_input = false;
+            Event::Char(self.root,line.chars().next().unwrap() as u32)
         } else {
-            let (test,line) = self.test.remove(0);
-            match test {
-                TestOutput::Match(expected) => {
-                    assert_eq!(expected, self.out.as_str());
-                },
-                TestOutput::Check(f) => {
-                    assert!(f(&self.out));
-                },
-            }
-            self.out.clear();
             let mut input = self.line_input.take().unwrap();
             {
                 let mut buf = &mut input.1;
@@ -601,7 +608,10 @@ impl<'a> Glk<'a> for GlkTest<'a> {
         }
     }
 
-    fn request_char_event(&mut self, _win: &Self::WinId) {
+    fn request_char_event(&mut self, win: &Self::WinId) {
+        if win.0 == self.root && self.root != 0 {
+            self.char_input = true;
+        }
     }
 
     fn request_mouse_event(&mut self, _win: &Self::WinId) {
@@ -1089,6 +1099,7 @@ impl IdType for SChanId {
 
 pub enum Event {
     Line((usize,u32,Option<(u32,Box<[u8]>)>)),
+    Char(usize,u32),
     None,
 }
 
@@ -1096,6 +1107,7 @@ impl EventType<WinId> for Event {
     fn evtype(&self) -> u32 {
         match self {
             &Event::Line(_) => glk::evtype_LineInput,
+            &Event::Char(_,_) => glk::evtype_CharInput,
             &Event::None => glk::evtype_None,
         }
     }
@@ -1103,6 +1115,7 @@ impl EventType<WinId> for Event {
     fn win(&self) -> WinId {
         match self {
             &Event::Line((win,_,_)) => WinId(win),
+            &Event::Char(win,_) => WinId(win),
             &Event::None => WinId(0),
         }
     }
@@ -1110,6 +1123,7 @@ impl EventType<WinId> for Event {
     fn val1(&self) -> u32 {
         match self {
             &Event::Line((_,val,_)) => val,
+            &Event::Char(_,val) => val,
             &Event::None => 0,
         }
     }
@@ -1121,6 +1135,7 @@ impl EventType<WinId> for Event {
     fn buf(&mut self) -> Option<(u32,Box<[u8]>)> {
         match self {
             &mut Event::Line((_,_,ref mut buf)) => buf.take(),
+            &mut Event::Char(_,_) => None,
             &mut Event::None => None,
         }
     }

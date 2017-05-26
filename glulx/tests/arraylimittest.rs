@@ -1,5 +1,6 @@
 extern crate glktest;
 extern crate glulx;
+extern crate iff;
 
 mod common;
 
