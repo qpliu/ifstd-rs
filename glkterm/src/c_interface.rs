@@ -32,7 +32,6 @@ pub extern fn glk_main() {
     super::main_func(main_func, startup_args());
 }
 
-#[link(name="glkterm")]
 extern {
     fn glkterm_main(argc: c_int, argv: *const *const c_char);
 }
@@ -193,7 +192,6 @@ pub struct glkdate_t {
     pub microsec: i32,
 }
 
-#[link(name="glkterm")]
 extern {
     pub fn glk_exit() -> !;
     pub fn glk_set_interrupt_handler(func: extern fn());
