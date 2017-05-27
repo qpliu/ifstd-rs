@@ -845,7 +845,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
     }
 
     fn l1(&mut self) -> u32 {
-        let (m1,_) = operand::next_mode(&mut self.state);
+        let m1 = operand::last_mode(&mut self.state);
         let l1 = m1.load(self);
         super::trace::operand(self, &m1, Some(l1));
         super::trace::frame(self);
@@ -864,7 +864,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
 
     fn l1l2l3(&mut self) -> (u32,u32,u32) {
         let (m1,m2) = operand::next_mode(&mut self.state);
-        let (m3,_) = operand::next_mode(&mut self.state);
+        let m3 = operand::last_mode(&mut self.state);
         let l1 = m1.load(self);
         let l2 = m2.load(self);
         let l3 = m3.load(self);
@@ -941,7 +941,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
     fn l1l2l3l4s1(&mut self) -> (u32,u32,u32,u32,operand::Mode) {
         let (m1,m2) = operand::next_mode(&mut self.state);
         let (m3,m4) = operand::next_mode(&mut self.state);
-        let (m5,_) = operand::next_mode(&mut self.state);
+        let m5 = operand::last_mode(&mut self.state);
         let l1 = m1.load(self);
         let l2 = m2.load(self);
         let l3 = m3.load(self);
@@ -959,7 +959,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
         let (m1,m2) = operand::next_mode(&mut self.state);
         let (m3,m4) = operand::next_mode(&mut self.state);
         let (m5,m6) = operand::next_mode(&mut self.state);
-        let (m7,_) = operand::next_mode(&mut self.state);
+        let m7 = operand::last_mode(&mut self.state);
         let l1 = m1.load(self);
         let l2 = m2.load(self);
         let l3 = m3.load(self);
@@ -1002,7 +1002,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
     }
 
     fn s1(&mut self) -> operand::Mode {
-        let (m1,_) = operand::next_mode(&mut self.state);
+        let m1 = operand::last_mode(&mut self.state);
         super::trace::operand(self, &m1, None);
         super::trace::frame(self);
         m1

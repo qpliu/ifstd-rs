@@ -28,6 +28,12 @@ pub fn next_mode(state: &mut State) -> (Mode,Mode) {
     (Mode(b & 0xf),Mode(b >> 4))
 }
 
+pub fn last_mode(state: &mut State) -> Mode {
+    let b = state.mem[state.pc];
+    state.pc += 1;
+    Mode(b & 0xf)
+}
+
 impl Mode {
     pub fn load<'a,G: Glk<'a>>(self, exec: &mut Execute<'a,G>) -> u32 {
         match self.0 {
