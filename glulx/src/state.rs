@@ -150,45 +150,49 @@ fn invalid_data(msg: &str) -> Error {
 
 #[inline]
 pub fn read_u32(bytes: &[u8], index: usize) -> u32 {
-    use std;
-    u32::from_be(unsafe { std::mem::transmute_copy(&bytes[index]) })
-/*
-    (bytes[index] as u32) << 24 | (bytes[index+1] as u32) << 16
-        | (bytes[index+2] as u32) << 8 | bytes[index+3] as u32
-*/
+    if cfg!(debug_assertions) {
+        (bytes[index] as u32) << 24 | (bytes[index+1] as u32) << 16
+            | (bytes[index+2] as u32) << 8 | bytes[index+3] as u32
+    } else {
+        use std;
+        u32::from_be(unsafe { std::mem::transmute_copy(&bytes[index]) })
+    }
 }
 
 #[inline]
 pub fn write_u32(bytes: &mut Vec<u8>, index: usize, val: u32) {
-    use std;
-    let mut p: &mut u32 = unsafe { std::mem::transmute(&mut bytes[index]) };
-    *p = u32::to_be(val);
-/*
-    bytes[index] = (val >> 24) as u8;
-    bytes[index+1] = (val >> 16) as u8;
-    bytes[index+2] = (val >> 8) as u8;
-    bytes[index+3] = val as u8;
-*/
+    if cfg!(debug_assertions) {
+        bytes[index] = (val >> 24) as u8;
+        bytes[index+1] = (val >> 16) as u8;
+        bytes[index+2] = (val >> 8) as u8;
+        bytes[index+3] = val as u8;
+    } else {
+        use std;
+        let mut p: &mut u32 = unsafe { std::mem::transmute(&mut bytes[index]) };
+        *p = u32::to_be(val);
+    }
 }
 
 #[inline]
 pub fn read_u16(bytes: &[u8], index: usize) -> u32 {
-    use std;
-    u16::from_be(unsafe { std::mem::transmute_copy(&bytes[index]) }) as u32
-/*
-    (bytes[index] as u32) << 8 | bytes[index+1] as u32
-*/
+    if cfg!(debug_assertions) {
+        (bytes[index] as u32) << 8 | bytes[index+1] as u32
+    } else {
+        use std;
+        u16::from_be(unsafe { std::mem::transmute_copy(&bytes[index]) }) as u32
+    }
 }
 
 #[inline]
 pub fn write_u16(bytes: &mut Vec<u8>, index: usize, val: u32) {
-    use std;
-    let mut p: &mut u16 = unsafe { std::mem::transmute(&mut bytes[index]) };
-    *p = u16::to_be(val as u16);
-/*
-    bytes[index] = (val >> 8) as u8;
-    bytes[index+1] = val as u8;
-*/
+    if cfg!(debug_assertions) {
+        bytes[index] = (val >> 8) as u8;
+        bytes[index+1] = val as u8;
+    } else {
+        use std;
+        let mut p: &mut u16 = unsafe { std::mem::transmute(&mut bytes[index]) };
+        *p = u16::to_be(val as u16);
+    }
 }
 
 pub fn read_arr8(bytes: &[u8], index: usize, dest: &mut [u8]) {
