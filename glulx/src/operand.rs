@@ -22,12 +22,14 @@ const RAM8: u8 = 13;
 const RAM16: u8 = 14;
 const RAM32: u8 = 15;
 
+#[inline]
 pub fn next_mode(state: &mut State) -> (Mode,Mode) {
     let b = read_u8(&state.mem, state.pc) as u8;
     state.pc += 1;
     (Mode(b & 0xf),Mode(b >> 4))
 }
 
+#[inline]
 pub fn last_mode(state: &mut State) -> Mode {
     let b = read_u8(&state.mem, state.pc) as u8;
     //assert_eq!(b & 0xf0, 0);
