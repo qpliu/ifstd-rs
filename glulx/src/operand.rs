@@ -1,7 +1,7 @@
 use glk::Glk;
 
 use super::call;
-use super::state::{read_u16,read_u32,write_u16,write_u32,State};
+use super::state::{read_u8,read_u16,read_u32,write_u8,write_u16,write_u32,State};
 use super::execute::Execute;
 
 #[derive(Clone,Copy,Debug)]
@@ -23,15 +23,16 @@ const RAM16: u8 = 14;
 const RAM32: u8 = 15;
 
 pub fn next_mode(state: &mut State) -> (Mode,Mode) {
-    let b = state.mem[state.pc];
+    let b = read_u8(&state.mem, state.pc) as u8;
     state.pc += 1;
     (Mode(b & 0xf),Mode(b >> 4))
 }
 
 pub fn last_mode(state: &mut State) -> Mode {
-    let b = state.mem[state.pc];
+    let b = read_u8(&state.mem, state.pc) as u8;
+    //assert_eq!(b & 0xf0, 0);
     state.pc += 1;
-    Mode(b & 0xf)
+    Mode(b)
 }
 
 impl Mode {
@@ -39,7 +40,7 @@ impl Mode {
         match self.0 {
             CONST0 => 0,
             CONST8 => {
-                let val = exec.state.mem[exec.state.pc];
+                let val = read_u8(&exec.state.mem, exec.state.pc);
                 exec.state.pc += 1;
                 val as i8 as i32 as u32
             },
@@ -54,7 +55,7 @@ impl Mode {
                 val
             },
             MEM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
                 read_u32(&exec.state.mem, addr)
             },
@@ -70,7 +71,7 @@ impl Mode {
             },
             STACK => exec.state.stack.pop().unwrap(),
             LOCAL8 => {
-                let offset = exec.state.mem[exec.state.pc] as usize;
+                let offset = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
                 assert!(offset % 4 == 0, "{:x}:non 32-bit stack locals deprecated", exec.state.pc);
                 exec.state.stack[exec.frame_locals + offset/4]
@@ -88,7 +89,7 @@ impl Mode {
                 exec.state.stack[exec.frame_locals + offset/4]
             },
             RAM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize + exec.ram_start;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 1;
                 read_u32(&exec.state.mem, addr & 0xffffffff)
             },
@@ -110,7 +111,7 @@ impl Mode {
         match self.0 {
             CONST0 => (),
             MEM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
                 write_u32(&mut exec.state.mem, addr, val);
             },
@@ -126,7 +127,7 @@ impl Mode {
             },
             STACK => exec.state.stack.push(val),
             LOCAL8 => {
-                let offset = exec.state.mem[exec.state.pc] as usize;
+                let offset = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
                 assert!(offset % 4 == 0, "{:x}:non 32-bit stack locals deprecated", exec.state.pc);
                 exec.state.stack[exec.frame_locals + offset/4] = val;
@@ -144,7 +145,7 @@ impl Mode {
                 exec.state.stack[exec.frame_locals + offset/4] = val;
             },
             RAM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize + exec.ram_start;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 1;
                 write_u32(&mut exec.state.mem, addr & 0xffffffff, val);
             },
@@ -166,7 +167,7 @@ impl Mode {
         match self.0 {
             CONST0 => 0,
             CONST8 => {
-                let val = exec.state.mem[exec.state.pc];
+                let val = read_u8(&exec.state.mem, exec.state.pc);
                 exec.state.pc += 1;
                 val as u32
             },
@@ -181,37 +182,37 @@ impl Mode {
                 val
             },
             MEM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
-                exec.state.mem[addr] as u32
+                read_u8(&exec.state.mem, addr)
             },
             MEM16 => {
                 let addr = read_u16(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 2;
-                exec.state.mem[addr] as u32
+                read_u8(&exec.state.mem, addr)
             },
             MEM32 => {
                 let addr = read_u32(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 4;
-                exec.state.mem[addr] as u32
+                read_u8(&exec.state.mem, addr)
             },
             STACK => exec.state.stack.pop().unwrap(),
             LOCAL8 | LOCAL16 | LOCAL32 =>
                 panic!("{:x}:non 32-bit stack locals deprecated", exec.state.pc),
             RAM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize + exec.ram_start;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 1;
-                exec.state.mem[addr & 0xffffffff] as u32
+                read_u8(&exec.state.mem, addr & 0xffffffff)
             },
             RAM16 => {
                 let addr = read_u16(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 2;
-                exec.state.mem[addr & 0xffffffff] as u32
+                read_u8(&exec.state.mem, addr & 0xffffffff)
             },
             RAM32 => {
                 let addr = read_u32(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 4;
-                exec.state.mem[addr & 0xffffffff] as u32
+                read_u8(&exec.state.mem, addr & 0xffffffff)
             },
             _ => panic!("Invalid store operand addr mode {:x} before pc {:x}", self.0, exec.state.pc),
         }
@@ -221,37 +222,37 @@ impl Mode {
         match self.0 {
             CONST0 => (),
             MEM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
-                exec.state.mem[addr] = val as u8;
+                write_u8(&mut exec.state.mem, addr, val);
             },
             MEM16 => {
                 let addr = read_u16(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 2;
-                exec.state.mem[addr] = val as u8;
+                write_u8(&mut exec.state.mem, addr, val);
             },
             MEM32 => {
                 let addr = read_u32(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 4;
-                exec.state.mem[addr] = val as u8;
+                write_u8(&mut exec.state.mem, addr, val);
             },
             STACK => exec.state.stack.push(val),
             LOCAL8 | LOCAL16 | LOCAL32 =>
                 panic!("{:x}:non 32-bit stack locals deprecated", exec.state.pc),
             RAM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize + exec.ram_start;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 1;
-                exec.state.mem[addr & 0xffffffff] = val as u8;
+                write_u8(&mut exec.state.mem, addr & 0xffffffff, val);
             },
             RAM16 => {
                 let addr = read_u16(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 2;
-                exec.state.mem[addr & 0xffffffff] = val as u8;
+                write_u8(&mut exec.state.mem, addr & 0xffffffff, val);
             },
             RAM32 => {
                 let addr = read_u32(&mut exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 4;
-                exec.state.mem[addr & 0xffffffff] = val as u8;
+                write_u8(&mut exec.state.mem, addr & 0xffffffff, val);
             },
             _ => panic!("Invalid store operand addr mode {:x} before pc {:x}", self.0, exec.state.pc),
         }
@@ -261,7 +262,7 @@ impl Mode {
         match self.0 {
             CONST0 => 0,
             CONST8 => {
-                let val = exec.state.mem[exec.state.pc];
+                let val = read_u8(&exec.state.mem, exec.state.pc);
                 exec.state.pc += 1;
                 val as i8 as i16 as u32
             },
@@ -276,7 +277,7 @@ impl Mode {
                 val
             },
             MEM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
                 read_u16(&exec.state.mem, addr)
             },
@@ -294,7 +295,7 @@ impl Mode {
             LOCAL8 | LOCAL16 | LOCAL32 =>
                 panic!("{:x}:non 32-bit stack locals deprecated", exec.state.pc),
             RAM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize + exec.ram_start;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 1;
                 read_u16(&exec.state.mem, addr & 0xffffffff)
             },
@@ -316,7 +317,7 @@ impl Mode {
         match self.0 {
             CONST0 => (),
             MEM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize;
                 exec.state.pc += 1;
                 write_u16(&mut exec.state.mem, addr, val);
             },
@@ -334,7 +335,7 @@ impl Mode {
             LOCAL8 | LOCAL16 | LOCAL32 =>
                 panic!("{:x}:non 32-bit stack locals deprecated", exec.state.pc),
             RAM8 => {
-                let addr = exec.state.mem[exec.state.pc] as usize + exec.ram_start;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) as usize + exec.ram_start;
                 exec.state.pc += 1;
                 write_u16(&mut exec.state.mem, addr & 0xffffffff, val);
             },
@@ -356,7 +357,7 @@ impl Mode {
         match self.0 {
             CONST0 => (call::DISCARD, 0),
             MEM8 => {
-                let addr = exec.state.mem[exec.state.pc] as u32;
+                let addr = read_u8(&exec.state.mem, exec.state.pc);
                 exec.state.pc += 1;
                 (call::MEM,addr)
             },
@@ -372,7 +373,7 @@ impl Mode {
             },
             STACK => (call::STACK,0),
             LOCAL8 => {
-                let offset = exec.state.mem[exec.state.pc] as u32;
+                let offset = read_u8(&exec.state.mem, exec.state.pc);
                 exec.state.pc += 1;
                 assert!(offset % 4 == 0, "{:x}:non 32-bit stack locals deprecated", exec.state.pc);
                 (call::LOCAL,offset)
@@ -390,7 +391,7 @@ impl Mode {
                 (call::LOCAL,offset)
             },
             RAM8 => {
-                let addr = exec.state.mem[exec.state.pc] as u32 + exec.ram_start as u32;
+                let addr = read_u8(&exec.state.mem, exec.state.pc) + exec.ram_start as u32;
                 exec.state.pc += 1;
                 (call::MEM,addr)
             },

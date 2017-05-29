@@ -3,7 +3,7 @@ use std::cmp::min;
 use glk::Glk;
 
 use super::{accel,call,gestalt,glk_dispatch,iosys,malloc,opcode,operand,search,state};
-use super::state::{read_u16,read_u32,write_u16,write_u32,State};
+use super::state::{read_u8,read_u16,read_u32,write_u16,write_u32,State};
 
 #[derive(Eq,PartialEq)]
 pub enum Next {
@@ -76,17 +76,14 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
 
     fn exec_next(&mut self) -> Next {
         let opcode_addr = self.state.pc;
-        let mut opcode = self.state.mem[self.state.pc] as u32;
+        let mut opcode = read_u8(&self.state.mem, self.state.pc);
         match opcode & 0xc0 {
             0xc0 => {
-                opcode = (opcode & 0x03f) << 24
-                    | (self.state.mem[self.state.pc+1] as u32) << 16
-                    | (self.state.mem[self.state.pc+2] as u32) << 8
-                    | self.state.mem[self.state.pc+3] as u32;
+                opcode = read_u32(&self.state.mem, self.state.pc) & 0x3fffffff;
                 self.state.pc += 4;
             },
             0x80 => {
-                opcode = (opcode & 0x03f) << 8 | self.state.mem[self.state.pc+1] as u32;
+                opcode = read_u16(&self.state.mem, self.state.pc) & 0x3fff;
                 self.state.pc += 2;
             },
             _ => self.state.pc += 1,

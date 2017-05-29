@@ -2,4 +2,4 @@ language: rust
 script:
   - cargo build --verbose --all
   - cargo test --verbose --all
-  - cargo test -p glulx-rs --release counterfeit -- --ignored --nocapture
+  - cargo test -q -p glulx-rs --release counterfeit -- --ignored --nocapture

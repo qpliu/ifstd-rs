@@ -195,6 +195,24 @@ pub fn write_u16(bytes: &mut Vec<u8>, index: usize, val: u32) {
     }
 }
 
+#[inline]
+pub fn read_u8(bytes: &[u8], index: usize) -> u32 {
+    if cfg!(debug_assertions) {
+        bytes[index] as u32
+    } else {
+        unsafe { *bytes.get_unchecked(index) as u32 }
+    }
+}
+
+#[inline]
+pub fn write_u8(bytes: &mut Vec<u8>, index: usize, val: u32) {
+    if cfg!(debug_assertions) {
+        bytes[index] = val as u8
+    } else {
+        unsafe { *bytes.get_unchecked_mut(index) = val as u8 }
+    }
+}
+
 pub fn read_arr8(bytes: &[u8], index: usize, dest: &mut [u8]) {
     for i in 0 .. dest.len() {
         dest[i] = bytes[index+i];
