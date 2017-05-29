@@ -9,11 +9,11 @@ pub const MEM: u32 = 1;
 pub const LOCAL: u32 = 2;
 pub const STACK: u32 = 3;
 
-pub const RESUME_E1: u32 = 10;
-pub const RESUME_CODE: u32 = 11;
-pub const RESUME_NUM: u32 = 12;
-pub const RESUME_E0: u32 = 13;
-pub const RESUME_E2: u32 = 14;
+pub const RESUME_E1: u32 = 0x10;
+pub const RESUME_CODE: u32 = 0x11;
+pub const RESUME_NUM: u32 = 0x12;
+pub const RESUME_E0: u32 = 0x13;
+pub const RESUME_E2: u32 = 0x14;
     
 pub const FUNC_C0: u8 = 0xc0;
 pub const FUNC_C1: u8 = 0xc1;
@@ -77,7 +77,7 @@ pub fn call_func<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize) {
             4 => {
                 frame_len += 2 + 4*local_count as u32;
             },
-            _ => panic!("unknown stack local type {:x}", local_type),
+            _ => panic!("{:x}: unknown stack local type {:x}", exec.state.pc, local_type),
         }
     }
     if locals_pos % 4 == 2 {
