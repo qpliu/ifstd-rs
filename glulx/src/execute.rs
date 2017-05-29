@@ -6,11 +6,10 @@ use super::{accel,call,gestalt,glk_dispatch,iosys,malloc,opcode,operand,search,s
 use super::state::{read_u8,read_u16,read_u32,write_u16,write_u32,State};
 
 #[derive(Eq,PartialEq)]
-pub enum Next {
-    Quit,
-    Exec,
-    Ret(u32),
-}
+pub struct Next(pub u64);
+
+pub const NEXT_EXEC: Next = Next(0x100000000);
+pub const NEXT_QUIT: Next = Next(0x200000000);
 
 const MAX_UNDO_DEPTH: usize = 2;
 
@@ -66,11 +65,12 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
         exec
     }
 
+    #[inline]
     pub fn next(&mut self, next: Next) -> Next {
         match next {
-            Next::Quit => Next::Quit,
-            Next::Exec => self.exec_next(),
-            Next::Ret(val) => call::ret(self, val),
+            NEXT_QUIT => NEXT_QUIT,
+            NEXT_EXEC => self.exec_next(),
+            Next(val) => call::ret(self, val as u32),
         }
     }
 
@@ -265,7 +265,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
                 self.state.stack.truncate((l2 / 4) as usize);
                 self.state.frame_ptr = self.state.stack.len();
                 self.tick();
-                return Next::Ret(l1);
+                return Next(l1 as u64);
             },
             opcode::TAILCALL => {
                 let (l1,l2) = self.l1l2();
@@ -461,7 +461,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
             },
             opcode::QUIT => {
                 super::trace::frame(self);
-                return Next::Quit;
+                return NEXT_QUIT;
             },
             opcode::VERIFY => {
                 let s1 = self.s1();
@@ -485,7 +485,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
                 let (l1,s1) = self.l1s1();
                 match iosys::restore(self, l1) {
                     Ok(()) => {
-                        return Next::Ret(0xffffffff);
+                        return Next(0xffffffff);
                     },
                     _ => s1.store(self, 1),
                 }
@@ -832,7 +832,7 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
                 panic!("{:x}: unknown opcode {:x}", opcode_addr, opcode);
             },
         }
-        Next::Exec
+        NEXT_EXEC
     }
 
     fn start(&mut self) {
@@ -1026,12 +1026,12 @@ impl<'a,G: Glk<'a>> Execute<'a,G> {
     fn jump(&mut self, offset: u32) -> Next {
         self.tick();
         match offset {
-            0 => Next::Ret(0),
-            1 => Next::Ret(1),
+            0 => Next(0),
+            1 => Next(1),
             _ => {
                 let pc = self.state.pc as i32 + offset as i32 - 2;
                 self.state.pc = pc as usize & 0xffffffff;
-                Next::Exec
+                NEXT_EXEC
             }
         }
     }

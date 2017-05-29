@@ -24,8 +24,8 @@ pub fn run<'a,G: Glk<'a>, R: std::io::Read>(glk: G, r: &mut R) -> (G,Result<(),s
         Err(cause) => (glk,Err(cause)),
         Ok(state) => {
             let mut exec = execute::Execute::new(state, glk);
-            let mut next = execute::Next::Exec;
-            while next != execute::Next::Quit {
+            let mut next = execute::NEXT_EXEC;
+            while next != execute::NEXT_QUIT {
                 next = exec.next(next);
             }
             (exec.glk,Ok(()))

@@ -2,7 +2,7 @@ use glk::Glk;
 
 use super::{accel,iosys,trace};
 use super::state::{read_u32,write_u32};
-use super::execute::{Execute,Next};
+use super::execute::{Execute,Next,NEXT_EXEC,NEXT_QUIT};
 
 pub const DISCARD: u32 = 0;
 pub const MEM: u32 = 1;
@@ -41,11 +41,11 @@ pub fn call<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize, dest_type: u32
 pub fn tailcall<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, addr: usize) -> Next {
     match accel::call(exec, addr) {
         Some(val) => {
-            Next::Ret(val)
+            Next(val as u64)
         },
         None => {
             call_func(exec, addr);
-            Next::Exec
+            NEXT_EXEC
         },
     }
 }
@@ -170,7 +170,7 @@ pub fn ret<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, val: u32) -> Next {
     }
     trace::call_stub(exec);
     match exec.state.stack.pop() {
-        None => return Next::Quit,
+        None => return NEXT_QUIT,
         Some(frame_ptr) => exec.state.frame_ptr = frame_ptr as usize,
     }
     exec.state.pc = exec.state.stack.pop().unwrap() as usize;
@@ -201,5 +201,5 @@ pub fn store_ret_result<'a,G: Glk<'a>>(exec: &mut Execute<'a,G>, val: u32, dest_
         RESUME_E2 => return iosys::resume_e2(exec),
         _ => panic!("unknown DestType {:x}", dest_type),
     }
-    Next::Exec
+    NEXT_EXEC
 }
